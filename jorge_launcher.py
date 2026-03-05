@@ -13,6 +13,8 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # ---------------------------------------------------------------------------
 # Demo mode: set env vars BEFORE config is imported so Settings picks them up
 # ---------------------------------------------------------------------------
@@ -40,6 +42,10 @@ if DEMO_MODE:
 # Add project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+
+# Load .env into process environment for launcher-level os.getenv checks.
+# This keeps launcher behavior consistent with Settings(env_file=".env").
+load_dotenv(project_root / ".env")
 
 from bots.shared.logger import get_logger
 

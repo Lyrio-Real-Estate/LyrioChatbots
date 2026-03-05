@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16
@@ -32,6 +30,8 @@ services:
     command: uvicorn bots.lead_bot.main:app --host 0.0.0.0 --port 8001
     ports:
       - "8001:8001"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jorge_bots
       - REDIS_URL=redis://redis:6379/0
@@ -51,6 +51,8 @@ services:
     command: uvicorn bots.seller_bot.main:app --host 0.0.0.0 --port 8002
     ports:
       - "8002:8002"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jorge_bots
       - REDIS_URL=redis://redis:6379/0
@@ -70,6 +72,8 @@ services:
     command: uvicorn bots.buyer_bot.main:app --host 0.0.0.0 --port 8003
     ports:
       - "8003:8003"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jorge_bots
       - REDIS_URL=redis://redis:6379/0
@@ -89,9 +93,12 @@ services:
     command: streamlit run command_center/dashboard_v3.py --server.port 8501 --server.address 0.0.0.0
     ports:
       - "8501:8501"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jorge_bots
       - REDIS_URL=redis://redis:6379/0
+      - LEAD_BOT_URL=http://lead-bot:8001
     depends_on:
       lead-bot:
         condition: service_healthy
@@ -103,6 +110,8 @@ services:
   launcher:
     build: .
     command: python jorge_launcher.py
+    env_file:
+      - .env
     depends_on:
       lead-bot:
         condition: service_healthy

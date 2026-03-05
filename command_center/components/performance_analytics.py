@@ -10,7 +10,6 @@ Displays comprehensive performance metrics including:
 
 Features real-time updates and interactive visualizations.
 """
-import asyncio
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -20,6 +19,7 @@ import streamlit as st
 
 from bots.shared.logger import get_logger
 from bots.shared.metrics_service import get_metrics_service
+from command_center.async_runtime import run_async
 
 logger = get_logger(__name__)
 
@@ -81,15 +81,9 @@ class PerformanceAnalyticsComponent:
     def _fetch_performance_data(self) -> Optional[Dict[str, Any]]:
         """Fetch all performance analytics data."""
         try:
-            # Fetch data asynchronously
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            performance_data = loop.run_until_complete(
+            performance_data = run_async(
                 self.metrics_service.get_performance_analytics_data()
             )
-
-            loop.close()
             return performance_data
 
         except Exception as e:

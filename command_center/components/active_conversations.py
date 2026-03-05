@@ -10,7 +10,6 @@ Displays real-time seller bot conversation states with:
 
 Features mobile-responsive design and real-time updates.
 """
-import asyncio
 from datetime import datetime
 from typing import List, Optional
 
@@ -26,6 +25,7 @@ from bots.shared.dashboard_models import (
     Temperature,
 )
 from bots.shared.logger import get_logger
+from command_center.async_runtime import run_async
 
 logger = get_logger(__name__)
 
@@ -161,19 +161,13 @@ class ActiveConversationsComponent:
             page = st.session_state.get('conversations_page', 1)
             page_size = 15  # Items per page
 
-            # Fetch data asynchronously
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            conversations_data = loop.run_until_complete(
+            conversations_data = run_async(
                 self.data_service.get_active_conversations(
                     filters=filters,
                     page=page,
                     page_size=page_size
                 )
             )
-
-            loop.close()
             return conversations_data
 
         except Exception as e:

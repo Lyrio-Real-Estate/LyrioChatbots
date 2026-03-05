@@ -3,7 +3,7 @@ Database repository helpers for common upsert and query operations.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -21,6 +21,15 @@ from database.session import AsyncSessionFactory
 def _now() -> datetime:
     """Return UTC timestamp without tzinfo for TIMESTAMP WITHOUT TIME ZONE columns."""
     return datetime.utcnow()
+
+
+def _as_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Normalize datetime to UTC naive for TIMESTAMP WITHOUT TIME ZONE columns."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 async def upsert_contact(
@@ -68,6 +77,8 @@ async def upsert_conversation(
     metadata_json: Optional[Dict[str, Any]] = None,
 ) -> None:
     metadata_json = metadata_json or {}
+    last_activity = _as_naive_utc(last_activity)
+    conversation_started = _as_naive_utc(conversation_started)
     async with AsyncSessionFactory() as session:
         stmt = select(ConversationModel).where(
             ConversationModel.contact_id == contact_id,

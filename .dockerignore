@@ -56,7 +56,8 @@ docs/
 .gitlab-ci.yml
 
 # Development files
-scripts/
+scripts/*
+!scripts/start_service.sh
 examples/
 *.local
 .mypy_cache/

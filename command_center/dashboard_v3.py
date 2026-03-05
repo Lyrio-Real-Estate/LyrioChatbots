@@ -2,7 +2,6 @@
 Jorge Real Estate AI - Dashboard V3
 Consolidated command center with navigation and auth gating.
 """
-import asyncio
 import os
 import sys
 from dataclasses import asdict
@@ -19,6 +18,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from bots.shared.dashboard_data_service import DashboardDataService
+from bots.shared.config import settings
+from command_center.async_runtime import run_async
 from command_center.components.active_conversations import ActiveConversationsComponent
 from command_center.components.active_conversations_table import render_active_conversations
 from command_center.components.activity_feed import ActivityFeed
@@ -97,7 +98,7 @@ def _serialize(obj: Any) -> Any:
 def load_dashboard_data():
     """Load dashboard data with 30-second cache."""
     service = DashboardDataService()
-    return asyncio.run(service.get_dashboard_data())
+    return run_async(service.get_dashboard_data())
 
 
 def render_overview(location_id: str) -> None:
@@ -132,7 +133,23 @@ def render_conversations(location_id: str) -> None:
         ActiveConversationsComponent().render()
 
     with tab3:
-        ActivityFeed().render()
+        lead_port = os.getenv("LEAD_BOT_PORT", "8001")
+        lead_api_base = os.getenv("LEAD_BOT_URL", f"http://localhost:{lead_port}").rstrip("/")
+        lead_public_base = os.getenv("LEAD_BOT_PUBLIC_URL", lead_api_base).rstrip("/")
+        ws_base = os.getenv("LEAD_BOT_WEBSOCKET_URL", "").rstrip("/")
+        if not ws_base:
+            if lead_public_base.startswith("https://"):
+                ws_base = "wss://" + lead_public_base[len("https://"):]
+            elif lead_public_base.startswith("http://"):
+                ws_base = "ws://" + lead_public_base[len("http://"):]
+            else:
+                ws_base = f"ws://{lead_public_base}"
+        websocket_url = ws_base if "/ws/" in ws_base else f"{ws_base}/ws/dashboard"
+
+        ActivityFeed(
+            websocket_url=websocket_url,
+            api_base_url=lead_api_base,
+        ).render()
 
 
 def render_pipeline(location_id: str) -> None:
@@ -169,8 +186,8 @@ def render_integrations(location_id: str) -> None:
     with tab2:
         if location_id:
             try:
-                status_component = asyncio.run(create_ghl_integration_status())
-                status_data = asyncio.run(status_component.get_integration_status(location_id))
+                status_component = run_async(create_ghl_integration_status())
+                status_data = run_async(status_component.get_integration_status(location_id))
                 st.json(_serialize(status_data))
             except Exception as exc:
                 st.error(f"Failed to load raw integration data: {exc}")
@@ -335,13 +352,17 @@ if not require_permission(user, "dashboard", "read"):
 
 
 # Sidebar controls + navigation
-default_location = os.getenv("GHL_LOCATION_ID", "")
+default_location = settings.ghl_location_id or os.getenv("GHL_LOCATION_ID", "")
 with st.sidebar:
     st.header("Navigation")
     section = st.radio("Go to", list(NAV_SECTIONS.keys()), index=0)
+    current_location = st.session_state.get("location_id")
+    if (not current_location or str(current_location).strip().lower() == "test") and default_location:
+        current_location = default_location
+
     location_id = st.text_input(
         "GHL Location ID",
-        value=st.session_state.get("location_id", default_location),
+        value=current_location or "",
     )
     st.session_state.location_id = location_id
 

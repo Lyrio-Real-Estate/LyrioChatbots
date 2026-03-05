@@ -881,23 +881,22 @@ class DashboardDataService:
             # Get current conversation summary
             summary = await self._calculate_conversation_summary()
 
-            # Calculate 24h deltas (simplified - in production, compare with historical data)
-            active_count = summary.get('active_count', 0)
-            qualified_count = summary.get('qualified_count', 0)
-            total_count = summary.get('total_count', 1)
+            active_count = summary.get('total_active', 0)
+            qualified_count = summary.get('qualified_this_week', 0)
+            total_count = summary.get('total_active', 0)
+            hot_count = (summary.get('by_temperature') or {}).get('HOT', 0)
 
             qualification_rate = qualified_count / total_count if total_count > 0 else 0.0
 
-            # Mock delta calculations (in production, fetch from PerformanceTracker)
             return HeroMetrics(
                 active_conversations=active_count,
-                active_conversations_change=2,  # Mock: +2 from yesterday
+                active_conversations_change=0,
                 qualification_rate=qualification_rate,
-                qualification_rate_change=0.05,  # Mock: +5% from yesterday
-                avg_response_time_minutes=12.5,
-                response_time_change=-1.2,  # Mock: -1.2m improvement
-                hot_leads_count=summary.get('hot_count', 0),
-                hot_leads_change=1  # Mock: +1 hot lead
+                qualification_rate_change=0.0,
+                avg_response_time_minutes=(summary.get('avg_response_time_hours', 0.0) * 60.0),
+                response_time_change=0.0,
+                hot_leads_count=hot_count,
+                hot_leads_change=0,
             )
 
         except Exception as e:
@@ -909,15 +908,27 @@ class DashboardDataService:
         from bots.shared.dashboard_models import PerformanceMetrics
 
         try:
-            # Get performance data from metrics service
-            metrics = await self.metrics_service.get_performance_metrics()
+            perf = await self.metrics_service.get_performance_metrics()
+            budget = await self.metrics_service.get_budget_distribution()
+            timeline = await self.metrics_service.get_timeline_distribution()
+            commission = await self.metrics_service.get_commission_metrics()
+            summary = await self._calculate_conversation_summary()
+
+            total_active = summary.get('total_active', 0)
+            qualified = summary.get('qualified_this_week', 0)
+            qualification_rate = (qualified / total_active) if total_active > 0 else 0.0
+            avg_response_minutes = (summary.get('avg_response_time_hours', 0.0) * 60.0)
 
             return PerformanceMetrics(
-                qualification_rate=metrics.get('qualification_rate', 0.65),
-                avg_response_time=metrics.get('avg_response_time_minutes', 12.5),
-                budget_performance=metrics.get('budget_performance', 1.1),
-                timeline_performance=metrics.get('timeline_performance', 0.95),
-                commission_performance=metrics.get('commission_performance', 1.05)
+                qualification_rate=qualification_rate,
+                avg_response_time=avg_response_minutes if avg_response_minutes > 0 else (perf.ai_avg_ms / 60000.0),
+                budget_performance=max(0.0, min(1.0, budget.validation_pass_rate / 100.0)),
+                timeline_performance=(
+                    (timeline.immediate_count / timeline.total_leads)
+                    if timeline.total_leads > 0
+                    else 0.0
+                ),
+                commission_performance=max(0.0, min(1.0, commission.service_area_match_rate / 100.0)),
             )
 
         except Exception as e:

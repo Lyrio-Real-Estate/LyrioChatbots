@@ -12,11 +12,15 @@ Mobile-responsive Streamlit interface for GHL integration monitoring:
 Author: Claude Code Assistant
 Created: 2026-01-23
 """
-import asyncio
+import os
 from datetime import datetime
+from typing import Optional, Tuple
 
+import httpx
 import streamlit as st
 
+from bots.shared.config import settings
+from command_center.async_runtime import run_async
 from .ghl_integration_status import (
     AutomationStatus,
     ConnectionStatus,
@@ -30,12 +34,52 @@ class GHLStatusUI:
 
     def __init__(self):
         self.status_component = None
+        lead_port = os.getenv("LEAD_BOT_PORT", "8001")
+        self._lead_bot_url = os.getenv("LEAD_BOT_URL", f"http://localhost:{lead_port}")
+        self._automation_bot_map = {
+            "Lead Qualification Bot": "lead",
+            "CMA Generation Pipeline": "seller",
+            "Follow-up Sequence": "buyer",
+            "Appointment Booking": "seller",
+        }
 
     async def _get_status_component(self):
         """Get or create status component"""
         if self.status_component is None:
             self.status_component = await create_ghl_integration_status()
         return self.status_component
+
+    def _bot_key_for_automation(self, automation_name: str) -> Optional[str]:
+        return self._automation_bot_map.get(automation_name)
+
+    def _control_headers(self) -> dict:
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        auth_token = st.session_state.get("auth_token")
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
+        if settings.admin_api_key:
+            headers["X-Admin-Key"] = settings.admin_api_key
+        return headers
+
+    def _set_bot_enabled(self, bot_key: str, enabled: bool) -> Tuple[bool, Optional[str]]:
+        endpoint = f"{self._lead_bot_url}/admin/automation-state/{bot_key}"
+        try:
+            headers = self._control_headers()
+            with httpx.Client(timeout=6.0) as client:
+                response = client.put(
+                    endpoint,
+                    json={"enabled": enabled},
+                    headers=headers,
+                )
+            if response.status_code < 400:
+                return True, None
+            return False, f"Control API error ({response.status_code}): {response.text}"
+        except Exception as exc:
+            return False, f"Failed to reach Lead Bot control API: {exc}"
+
+    def _refresh_after_control_change(self) -> None:
+        st.cache_data.clear()
+        st.rerun()
 
     def render_ghl_status_section(self, location_id: str) -> None:
         """
@@ -59,7 +103,7 @@ class GHLStatusUI:
                 st.rerun()
 
         # Load status data
-        status_data = self._load_status_data(location_id)
+        status_data = self._load_status_data(location_id, st.session_state.get("auth_token"))
 
         if not status_data:
             self._render_loading_state()
@@ -76,22 +120,12 @@ class GHLStatusUI:
         self._render_performance_metrics(status_data)
 
     @st.cache_data(ttl=30)  # Cache for 30 seconds for real-time feel
-    def _load_status_data(_self, location_id: str) -> GHLIntegrationData:
+    def _load_status_data(_self, location_id: str, auth_token: Optional[str] = None) -> GHLIntegrationData:
         """Load GHL status data with caching"""
         try:
-            # Run async function in sync context
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            try:
-                ui_instance = GHLStatusUI()
-                status_component = loop.run_until_complete(ui_instance._get_status_component())
-                status_data = loop.run_until_complete(
-                    status_component.get_integration_status(location_id)
-                )
-                return status_data
-            finally:
-                loop.close()
+            ui_instance = GHLStatusUI()
+            status_component = run_async(ui_instance._get_status_component())
+            return run_async(status_component.get_integration_status(location_id, auth_token=auth_token))
 
         except Exception as e:
             st.error(f"Error loading GHL status: {e}")
@@ -164,18 +198,32 @@ class GHLStatusUI:
 
         # API Rate Limits
         with col2:
-            rate_color = "#10B981" if status_data.connection.rate_limit_remaining > 2000 else "#F59E0B" if status_data.connection.rate_limit_remaining > 500 else "#EF4444"
+            if status_data.connection.rate_limit_known:
+                if status_data.connection.rate_limit_remaining > 2000:
+                    rate_color = "#10B981"
+                elif status_data.connection.rate_limit_remaining > 500:
+                    rate_color = "#F59E0B"
+                else:
+                    rate_color = "#EF4444"
+                rate_display = f"{status_data.connection.rate_limit_remaining:,}"
+                reset_display = status_data.connection.rate_limit_reset.strftime('%H:%M')
+                remaining_caption = "Remaining calls"
+            else:
+                rate_color = "#6B7280"
+                rate_display = "N/A"
+                reset_display = "Unknown"
+                remaining_caption = "Header not exposed"
 
             st.markdown(f"""
             <div style="background: white; padding: 20px; border-radius: 10px;
                        box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid {rate_color};">
                 <div style="font-size: 1rem; color: #374151; font-weight: 600;">API Rate Limits</div>
                 <div style="font-size: 1.5rem; margin: 8px 0; color: {rate_color};">
-                    {status_data.connection.rate_limit_remaining:,}
+                    {rate_display}
                 </div>
                 <div style="font-size: 0.875rem; color: #6b7280;">
-                    Remaining calls<br>
-                    Resets: {status_data.connection.rate_limit_reset.strftime('%H:%M')}
+                    {remaining_caption}<br>
+                    Resets: {reset_display}
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -227,25 +275,15 @@ class GHLStatusUI:
 
         with col1:
             # Status overview chart
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                status_component = loop.run_until_complete(self._get_status_component())
-                overview_chart = status_component.create_status_overview_chart(status_data)
-                st.plotly_chart(overview_chart, use_container_width=True)
-            finally:
-                loop.close()
+            status_component = run_async(self._get_status_component())
+            overview_chart = status_component.create_status_overview_chart(status_data)
+            st.plotly_chart(overview_chart, use_container_width=True)
 
         with col2:
             # Webhook health chart
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                status_component = loop.run_until_complete(self._get_status_component())
-                webhook_chart = status_component.create_webhook_health_chart(status_data)
-                st.plotly_chart(webhook_chart, use_container_width=True)
-            finally:
-                loop.close()
+            status_component = run_async(self._get_status_component())
+            webhook_chart = status_component.create_webhook_health_chart(status_data)
+            st.plotly_chart(webhook_chart, use_container_width=True)
 
     def _render_automation_controls(self, status_data: GHLIntegrationData) -> None:
         """Render automation control panel"""
@@ -257,15 +295,15 @@ class GHLStatusUI:
 
         with col1:
             if st.button("🚀 Start All", help="Start all paused automations", use_container_width=True):
-                self._start_all_automations()
+                self._start_all_automations(status_data)
 
         with col2:
             if st.button("⏸️ Pause All", help="Pause all running automations", use_container_width=True):
-                self._pause_all_automations()
+                self._pause_all_automations(status_data)
 
         with col3:
             if st.button("🔄 Restart Failed", help="Restart failed automations", use_container_width=True):
-                self._restart_failed_automations()
+                self._restart_failed_automations(status_data)
 
         with col4:
             if st.button("📊 Performance Report", help="Generate automation report", use_container_width=True):
@@ -318,14 +356,9 @@ class GHLStatusUI:
 
         # Automation performance chart
         st.markdown("### 📈 Automation Performance")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            status_component = loop.run_until_complete(self._get_status_component())
-            performance_chart = status_component.create_automation_performance_chart(status_data)
-            st.plotly_chart(performance_chart, use_container_width=True)
-        finally:
-            loop.close()
+        status_component = run_async(self._get_status_component())
+        performance_chart = status_component.create_automation_performance_chart(status_data)
+        st.plotly_chart(performance_chart, use_container_width=True)
 
     def _render_performance_metrics(self, status_data: GHLIntegrationData) -> None:
         """Render detailed performance metrics"""
@@ -380,32 +413,126 @@ class GHLStatusUI:
             st.empty()
 
     # Automation control methods
-    def _start_all_automations(self) -> None:
+    def _start_all_automations(self, status_data: GHLIntegrationData) -> None:
         """Start all paused automations"""
-        st.success("🚀 Starting all paused automations...")
-        st.info("✅ All automations are now active")
+        bot_keys = {
+            self._bot_key_for_automation(automation.name)
+            for automation in status_data.automations
+        }
+        bot_keys = {bot for bot in bot_keys if bot}
+        if not bot_keys:
+            st.info("No controllable automations found.")
+            return
 
-    def _pause_all_automations(self) -> None:
+        failed = []
+        for bot_key in sorted(bot_keys):
+            ok, err = self._set_bot_enabled(bot_key, True)
+            if not ok:
+                failed.append(bot_key)
+                if err:
+                    st.error(err)
+
+        if failed:
+            st.error(f"Failed to start automations for: {', '.join(failed)}")
+            return
+
+        st.success("🚀 All automations set to active")
+        self._refresh_after_control_change()
+
+    def _pause_all_automations(self, status_data: GHLIntegrationData) -> None:
         """Pause all running automations"""
-        st.warning("⏸️ Pausing all automations...")
-        st.info("✅ All automations paused")
+        bot_keys = {
+            self._bot_key_for_automation(automation.name)
+            for automation in status_data.automations
+        }
+        bot_keys = {bot for bot in bot_keys if bot}
+        if not bot_keys:
+            st.info("No controllable automations found.")
+            return
 
-    def _restart_failed_automations(self) -> None:
+        failed = []
+        for bot_key in sorted(bot_keys):
+            ok, err = self._set_bot_enabled(bot_key, False)
+            if not ok:
+                failed.append(bot_key)
+                if err:
+                    st.error(err)
+
+        if failed:
+            st.error(f"Failed to pause automations for: {', '.join(failed)}")
+            return
+
+        st.warning("⏸️ All automations paused")
+        self._refresh_after_control_change()
+
+    def _restart_failed_automations(self, status_data: GHLIntegrationData) -> None:
         """Restart failed automations"""
-        st.success("🔄 Restarting failed automations...")
-        st.info("✅ Failed automations restarted")
+        failed_bots = set()
+        for automation in status_data.automations:
+            if automation.status == AutomationStatus.ERROR:
+                bot_key = self._bot_key_for_automation(automation.name)
+                if bot_key:
+                    failed_bots.add(bot_key)
+        if not failed_bots:
+            st.info("No failed automations to restart.")
+            return
+
+        restart_failures = []
+        for bot_key in sorted(failed_bots):
+            ok, err = self._set_bot_enabled(bot_key, True)
+            if not ok:
+                restart_failures.append(bot_key)
+                if err:
+                    st.error(err)
+
+        if restart_failures:
+            st.error(f"Failed to restart automations for: {', '.join(restart_failures)}")
+            return
+
+        st.success(f"🔄 Restarted failed automations: {len(failed_bots)}")
+        self._refresh_after_control_change()
 
     def _start_automation(self, automation_name: str) -> None:
         """Start specific automation"""
-        st.success(f"▶️ Starting {automation_name}...")
+        bot_key = self._bot_key_for_automation(automation_name)
+        if not bot_key:
+            st.warning(f"No control mapping for {automation_name}")
+            return
+        ok, err = self._set_bot_enabled(bot_key, True)
+        if not ok:
+            if err:
+                st.error(err)
+            return
+        st.success(f"▶️ Started {automation_name}")
+        self._refresh_after_control_change()
 
     def _pause_automation(self, automation_name: str) -> None:
         """Pause specific automation"""
-        st.warning(f"⏸️ Pausing {automation_name}...")
+        bot_key = self._bot_key_for_automation(automation_name)
+        if not bot_key:
+            st.warning(f"No control mapping for {automation_name}")
+            return
+        ok, err = self._set_bot_enabled(bot_key, False)
+        if not ok:
+            if err:
+                st.error(err)
+            return
+        st.warning(f"⏸️ Paused {automation_name}")
+        self._refresh_after_control_change()
 
     def _restart_automation(self, automation_name: str) -> None:
         """Restart specific automation"""
-        st.success(f"🔄 Restarting {automation_name}...")
+        bot_key = self._bot_key_for_automation(automation_name)
+        if not bot_key:
+            st.warning(f"No control mapping for {automation_name}")
+            return
+        ok, err = self._set_bot_enabled(bot_key, True)
+        if not ok:
+            if err:
+                st.error(err)
+            return
+        st.success(f"🔄 Restarted {automation_name}")
+        self._refresh_after_control_change()
 
     def _show_automation_report(self, status_data: GHLIntegrationData) -> None:
         """Show automation performance report"""

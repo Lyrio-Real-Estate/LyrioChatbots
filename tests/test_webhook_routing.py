@@ -205,6 +205,55 @@ class TestWebhookRouting:
         mock_lead.analyze_lead.assert_awaited_once()
         mock_ghl.send_message.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_paused_seller_automation_skips_processing(self, app):
+        """When seller automation is paused, webhook returns paused and seller bot is not called."""
+        state, mock_seller, mock_buyer, _, _ = _make_state()
+
+        def _override_for(bot: str):
+            return {"enabled": False} if bot == "seller" else {}
+
+        with (
+            patch("bots.lead_bot.routes_webhook._get_state", return_value=state),
+            patch("bots.lead_bot.routes_webhook._get_bot_override", side_effect=_override_for),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/ghl/webhook",
+                    content=_body(bot_type="seller", contact_id="paused-seller"),
+                    headers={"Content-Type": "application/json"},
+                )
+
+        assert r.status_code == 200
+        assert r.json()["status"] == "paused"
+        assert r.json()["bot_type"] == "seller"
+        mock_seller.process_seller_message.assert_not_awaited()
+        mock_buyer.process_buyer_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_paused_lead_automation_skips_new_lead_processing(self, app):
+        """When lead automation is paused, new-lead webhook returns paused and analyzer is not called."""
+        state, _, _, _, mock_lead = _make_state()
+
+        def _override_for(bot: str):
+            return {"enabled": False} if bot == "lead" else {}
+
+        with (
+            patch("bots.lead_bot.routes_webhook._get_state", return_value=state),
+            patch("bots.lead_bot.routes_webhook._get_bot_override", side_effect=_override_for),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/ghl/webhook/new-lead",
+                    content=json.dumps({"id": "paused-lead"}).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+
+        assert r.status_code == 200
+        assert r.json()["status"] == "paused"
+        assert r.json()["bot_type"] == "lead"
+        mock_lead.analyze_lead.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # Fix 3 — Bot exclusivity

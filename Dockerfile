@@ -35,7 +35,4 @@ USER jorge
 
 EXPOSE 8001 8002 8003 8501
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
-
-CMD ["python", "jorge_launcher.py"]
+CMD ["bash", "-lc", "bash ./scripts/start_service.sh"]

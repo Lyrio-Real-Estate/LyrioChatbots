@@ -11,11 +11,11 @@ Renders Jorge's enhanced hero metrics with superior UX:
 Author: Claude Code Assistant
 Created: 2026-01-23
 """
-import asyncio
 from typing import List
 
 import streamlit as st
 
+from command_center.async_runtime import run_async
 from .enhanced_hero_metrics import HeroMetricData, create_enhanced_hero_metrics
 
 
@@ -63,18 +63,8 @@ class HeroMetricsUI:
     def _load_metrics_data(_self, location_id: str) -> List[HeroMetricData]:
         """Load hero metrics data with caching"""
         try:
-            # Run async function in sync context
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            try:
-                metrics_component = create_enhanced_hero_metrics()
-                metrics_data = loop.run_until_complete(
-                    metrics_component.get_hero_metrics_data(location_id)
-                )
-                return metrics_data
-            finally:
-                loop.close()
+            metrics_component = create_enhanced_hero_metrics()
+            return run_async(metrics_component.get_hero_metrics_data(location_id))
 
         except Exception as e:
             st.error(f"Error loading hero metrics: {e}")

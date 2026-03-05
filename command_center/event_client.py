@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from bots.shared.logger import get_logger
+from command_center.async_runtime import run_async
 
 logger = get_logger(__name__)
 
@@ -309,7 +310,7 @@ class SyncEventClient:
         """Synchronous version of get_recent_events"""
         try:
             client = self._get_client()
-            return asyncio.run(
+            return run_async(
                 client.get_recent_events(since_minutes, event_types, limit)
             )
         except Exception as e:
@@ -320,7 +321,7 @@ class SyncEventClient:
         """Synchronous version of get_performance_metrics"""
         try:
             client = self._get_client()
-            return asyncio.run(client.get_performance_metrics())
+            return run_async(client.get_performance_metrics())
         except Exception as e:
             logger.error(f"Sync get_performance_metrics failed: {e}")
             return None
@@ -329,7 +330,7 @@ class SyncEventClient:
         """Synchronous version of get_websocket_status"""
         try:
             client = self._get_client()
-            return asyncio.run(client.get_websocket_status())
+            return run_async(client.get_websocket_status())
         except Exception as e:
             logger.error(f"Sync get_websocket_status failed: {e}")
             return {"status": "error", "error": str(e)}
@@ -338,7 +339,7 @@ class SyncEventClient:
         """Synchronous version of health_check"""
         try:
             client = self._get_client()
-            return asyncio.run(client.health_check())
+            return run_async(client.health_check())
         except Exception as e:
             logger.error(f"Sync health_check failed: {e}")
             return False
@@ -347,7 +348,7 @@ class SyncEventClient:
         """Close the client"""
         if self._client:
             try:
-                asyncio.run(self._client.close())
+                run_async(self._client.close())
             except Exception as e:
                 logger.error(f"Error closing sync client: {e}")
             finally:

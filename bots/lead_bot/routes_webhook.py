@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
+from bots.shared.bot_settings import get_override as _get_bot_override
 from bots.shared.config import settings
 from bots.shared.logger import get_logger
 from bots.shared.response_filter import sanitize_bot_response
@@ -18,6 +19,23 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _ASSIGNED_BOT_TTL = 604_800  # 7 days
+
+
+def _coerce_enabled(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "off", "no"}
+    return bool(value)
+
+
+def _is_automation_enabled(bot_key: str) -> bool:
+    overrides = _get_bot_override(bot_key)
+    if not isinstance(overrides, dict):
+        return True
+    return _coerce_enabled(overrides.get("enabled", True))
 
 
 async def _deferred_tag_apply(
@@ -66,6 +84,10 @@ async def handle_new_lead(request: Request):
         contact_id = payload.get("id")
         if not contact_id:
             raise HTTPException(status_code=400, detail="Missing contact ID")
+
+        if not _is_automation_enabled("lead"):
+            logger.info(f"Lead automation paused; skipping new-lead processing for {contact_id}")
+            return {"status": "paused", "bot_type": "lead", "reason": "automation_paused"}
 
         analysis_start = time.time()
         analysis_result, metrics = await state.lead_analyzer.analyze_lead(payload)
@@ -239,6 +261,19 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
                 f"Unified webhook: contact={contact_id}, bot_type={bot_type_lower!r}, "
                 f"msg={message_body[:60]!r}"
             )
+
+            if "seller" in bot_type_lower:
+                automation_bot = "seller"
+            elif "buyer" in bot_type_lower:
+                automation_bot = "buyer"
+            else:
+                automation_bot = "lead"
+
+            if not _is_automation_enabled(automation_bot):
+                logger.info(
+                    f"Unified webhook: automation paused for bot={automation_bot}, contact={contact_id}; skipping"
+                )
+                return {"status": "paused", "bot_type": automation_bot, "reason": "automation_paused"}
 
             # Route to bot
             response_message: Optional[str] = None

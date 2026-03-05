@@ -1,6 +1,11 @@
 """Admin settings routes for Lead Bot — bot tone configuration."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel
 
 from bots.shared.auth_middleware import get_admin_user
 from bots.shared.bot_settings import (
@@ -9,6 +14,7 @@ from bots.shared.bot_settings import (
     update_settings as _settings_update,
     KNOWN_BOTS as _known_bots,
 )
+from bots.shared.config import settings
 from bots.shared.logger import get_logger
 
 logger = get_logger(__name__)
@@ -66,6 +72,63 @@ async def admin_get_settings(user=Depends(get_admin_user())):
                 for k, v in BUYER_QUESTIONS.items()
             },
         },
+    }
+
+
+class AutomationToggleRequest(BaseModel):
+    enabled: bool
+
+
+def _check_admin_key(x_admin_key: Optional[str] = Header(default=None, alias="X-Admin-Key")) -> None:
+    """
+    Allow requests carrying ADMIN_API_KEY.
+
+    If no ADMIN_API_KEY is configured, this check is a no-op (dev mode).
+    """
+    if not settings.admin_api_key:
+        return
+    if x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+
+@router.get("/admin/automation-state")
+async def admin_get_automation_state(_: None = Depends(_check_admin_key)):
+    """Return pause/resume state for automation bots."""
+    state = {
+        bot: bool(_get_override(bot).get("enabled", True))
+        for bot in sorted(_known_bots)
+    }
+    return {
+        "status": "ok",
+        "automations": state,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@router.put("/admin/automation-state/{bot}")
+async def admin_set_automation_state(
+    bot: str,
+    payload: AutomationToggleRequest,
+    _: None = Depends(_check_admin_key),
+):
+    """
+    Pause/resume automation processing for one bot.
+
+    Applies immediately in lead-bot process and persists to cache for restart recovery.
+    """
+    from bots.lead_bot import main as _m
+
+    if bot not in _known_bots:
+        raise HTTPException(status_code=404, detail=f"Unknown bot: {bot}. Valid: {sorted(_known_bots)}")
+
+    _settings_update(bot, {"enabled": payload.enabled})
+    await settings_save(_m._webhook_cache)
+
+    return {
+        "status": "ok",
+        "bot": bot,
+        "enabled": payload.enabled,
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 

@@ -10,7 +10,6 @@ Displays commission tracking and forecasting including:
 
 Features real-time updates and business rule integration.
 """
-import asyncio
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -20,6 +19,7 @@ import streamlit as st
 
 from bots.shared.logger import get_logger
 from bots.shared.metrics_service import get_metrics_service
+from command_center.async_runtime import run_async
 
 logger = get_logger(__name__)
 
@@ -81,15 +81,9 @@ class CommissionTrackingComponent:
     def _fetch_commission_data(self) -> Optional[Dict[str, Any]]:
         """Fetch commission tracking data."""
         try:
-            # Fetch data asynchronously
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            commission_data = loop.run_until_complete(
+            commission_data = run_async(
                 self.metrics_service.get_commission_metrics()
             )
-
-            loop.close()
             return commission_data.__dict__ if commission_data else None
 
         except Exception as e:

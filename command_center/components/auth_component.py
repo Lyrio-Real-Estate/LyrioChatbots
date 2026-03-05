@@ -3,15 +3,157 @@ Authentication component for Streamlit dashboard.
 
 Provides login/logout functionality and session management.
 """
-import asyncio
+import secrets
 from typing import Optional
 
 import streamlit as st
 
 from bots.shared.auth_service import User, UserRole, get_auth_service
 from bots.shared.logger import get_logger
+from command_center.async_runtime import run_async
 
 logger = get_logger(__name__)
+
+_AUTH_QUERY_PARAM = "sid"
+_AUTH_SESSION_ID_KEY = "auth_session_id"
+_AUTH_SESSION_CACHE_PREFIX = "auth:streamlit:session"
+_AUTH_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
+
+
+def _auth_session_cache_key(session_id: str) -> str:
+    return f"{_AUTH_SESSION_CACHE_PREFIX}:{session_id}"
+
+
+def _read_query_param(name: str) -> Optional[str]:
+    """Read one query param value across Streamlit versions."""
+    try:
+        query_params = getattr(st, "query_params", None)
+        if query_params is not None:
+            value = query_params.get(name)
+            if isinstance(value, list):
+                return str(value[0]) if value else None
+            return str(value) if value is not None else None
+    except Exception:
+        pass
+
+    try:
+        params = st.experimental_get_query_params()
+        value = params.get(name)
+        if isinstance(value, list):
+            return str(value[0]) if value else None
+        return str(value) if value is not None else None
+    except Exception:
+        return None
+
+
+def _write_query_param(name: str, value: Optional[str]) -> None:
+    """Write/remove one query param value across Streamlit versions."""
+    try:
+        query_params = getattr(st, "query_params", None)
+        if query_params is not None:
+            if value:
+                query_params[name] = value
+            elif name in query_params:
+                del query_params[name]
+            return
+    except Exception:
+        pass
+
+    try:
+        params = st.experimental_get_query_params()
+        if value:
+            params[name] = value
+        else:
+            params.pop(name, None)
+        st.experimental_set_query_params(**params)
+    except Exception:
+        return
+
+
+def _persist_auth_session(auth_token: str, refresh_token: str) -> None:
+    """Persist auth tokens server-side and keep only opaque session id in URL."""
+    try:
+        auth_service = get_auth_service()
+        session_id = st.session_state.get(_AUTH_SESSION_ID_KEY)
+        if not session_id:
+            session_id = secrets.token_urlsafe(24)
+            st.session_state[_AUTH_SESSION_ID_KEY] = session_id
+
+        payload = {
+            "auth_token": auth_token,
+            "refresh_token": refresh_token,
+        }
+        run_async(
+            auth_service.cache_service.set(
+                _auth_session_cache_key(session_id),
+                payload,
+                ttl=_AUTH_SESSION_TTL_SECONDS,
+            )
+        )
+        _write_query_param(_AUTH_QUERY_PARAM, session_id)
+    except Exception as exc:
+        logger.warning(f"Failed to persist Streamlit auth session: {exc}")
+
+
+def _restore_auth_session() -> bool:
+    """Restore auth tokens from persisted Streamlit session when available."""
+    if "auth_token" in st.session_state and "refresh_token" in st.session_state:
+        return True
+
+    session_id = st.session_state.get(_AUTH_SESSION_ID_KEY) or _read_query_param(_AUTH_QUERY_PARAM)
+    if not session_id:
+        return False
+
+    try:
+        auth_service = get_auth_service()
+        payload = run_async(auth_service.cache_service.get(_auth_session_cache_key(session_id)))
+        if not isinstance(payload, dict):
+            st.session_state.pop(_AUTH_SESSION_ID_KEY, None)
+            _write_query_param(_AUTH_QUERY_PARAM, None)
+            return False
+
+        auth_token = payload.get("auth_token")
+        refresh_token = payload.get("refresh_token")
+        if not auth_token or not refresh_token:
+            st.session_state.pop(_AUTH_SESSION_ID_KEY, None)
+            _write_query_param(_AUTH_QUERY_PARAM, None)
+            return False
+
+        st.session_state[_AUTH_SESSION_ID_KEY] = session_id
+        st.session_state.auth_token = auth_token
+        st.session_state.refresh_token = refresh_token
+        _write_query_param(_AUTH_QUERY_PARAM, session_id)
+        # Sliding TTL so active sessions persist while in use.
+        _persist_auth_session(auth_token, refresh_token)
+        return True
+    except Exception as exc:
+        logger.warning(f"Failed to restore Streamlit auth session: {exc}")
+        return False
+
+
+def _set_authenticated_state(user: User, auth_token: str, refresh_token: str) -> None:
+    st.session_state.auth_token = auth_token
+    st.session_state.refresh_token = refresh_token
+    st.session_state.user = {
+        'user_id': user.user_id,
+        'email': user.email,
+        'name': user.name,
+        'role': user.role.value
+    }
+    st.session_state.must_change_password = user.must_change_password
+    _persist_auth_session(auth_token, refresh_token)
+
+
+def _clear_persisted_auth_session() -> None:
+    session_id = st.session_state.get(_AUTH_SESSION_ID_KEY) or _read_query_param(_AUTH_QUERY_PARAM)
+    try:
+        if session_id:
+            auth_service = get_auth_service()
+            run_async(auth_service.cache_service.delete(_auth_session_cache_key(session_id)))
+    except Exception as exc:
+        logger.warning(f"Failed to clear persisted auth session: {exc}")
+    _write_query_param(_AUTH_QUERY_PARAM, None)
+    st.session_state.pop(_AUTH_SESSION_ID_KEY, None)
 
 
 def render_login_form() -> Optional[User]:
@@ -43,22 +185,14 @@ def render_login_form() -> Optional[User]:
             try:
                 # Authenticate user
                 auth_service = get_auth_service()
-                tokens = asyncio.run(auth_service.authenticate(email, password))
+                tokens = run_async(auth_service.authenticate(email, password))
                 
                 if tokens:
                     # Get user info
-                    user = asyncio.run(auth_service.validate_token(tokens.access_token))
+                    user = run_async(auth_service.validate_token(tokens.access_token))
                     if user:
-                        # Store in session
-                        st.session_state.auth_token = tokens.access_token
-                        st.session_state.refresh_token = tokens.refresh_token
-                        st.session_state.user = {
-                            'user_id': user.user_id,
-                            'email': user.email,
-                            'name': user.name,
-                            'role': user.role.value
-                        }
-                        st.session_state.must_change_password = user.must_change_password
+                        # Store in session (and persist across browser refreshes)
+                        _set_authenticated_state(user, tokens.access_token, tokens.refresh_token)
                         
                         st.success(f"Welcome, {user.name}!")
                         st.rerun()
@@ -92,11 +226,14 @@ def check_authentication() -> Optional[User]:
         Authenticated user if session is valid, None otherwise
     """
     if 'auth_token' not in st.session_state:
+        _restore_auth_session()
+
+    if 'auth_token' not in st.session_state:
         return None
     
     try:
         auth_service = get_auth_service()
-        user = asyncio.run(auth_service.validate_token(st.session_state.auth_token))
+        user = run_async(auth_service.validate_token(st.session_state.auth_token))
         
         if user:
             # Update session user info
@@ -107,24 +244,18 @@ def check_authentication() -> Optional[User]:
                 'role': user.role.value
             }
             st.session_state.must_change_password = user.must_change_password
+            if 'refresh_token' in st.session_state:
+                _persist_auth_session(st.session_state.auth_token, st.session_state.refresh_token)
             return user
         else:
             # Token expired or invalid, try refresh
             if 'refresh_token' in st.session_state:
-                tokens = asyncio.run(auth_service.refresh_token(st.session_state.refresh_token))
+                tokens = run_async(auth_service.refresh_token(st.session_state.refresh_token))
                 if tokens:
-                    user = asyncio.run(auth_service.validate_token(tokens.access_token))
+                    user = run_async(auth_service.validate_token(tokens.access_token))
                     if user:
-                        # Update session with new tokens
-                        st.session_state.auth_token = tokens.access_token
-                        st.session_state.refresh_token = tokens.refresh_token
-                        st.session_state.user = {
-                            'user_id': user.user_id,
-                            'email': user.email,
-                            'name': user.name,
-                            'role': user.role.value
-                        }
-                        st.session_state.must_change_password = user.must_change_password
+                        # Update session with new tokens and persistence
+                        _set_authenticated_state(user, tokens.access_token, tokens.refresh_token)
                         return user
             
             # Clear invalid session
@@ -139,7 +270,8 @@ def check_authentication() -> Optional[User]:
 
 def clear_session() -> None:
     """Clear authentication session."""
-    keys_to_remove = ['auth_token', 'refresh_token', 'user', 'must_change_password']
+    _clear_persisted_auth_session()
+    keys_to_remove = ['auth_token', 'refresh_token', 'user', 'must_change_password', _AUTH_SESSION_ID_KEY]
     for key in keys_to_remove:
         if key in st.session_state:
             del st.session_state[key]
@@ -161,7 +293,7 @@ def render_password_change_form(user: User) -> bool:
                 st.error("Passwords do not match.")
                 return False
             auth_service = get_auth_service()
-            success = asyncio.run(auth_service.change_password(user.user_id, new_password))
+            success = run_async(auth_service.change_password(user.user_id, new_password))
             if success:
                 st.session_state.must_change_password = False
                 st.success("Password updated. Please continue.")
@@ -213,7 +345,7 @@ def check_permission(user: User, resource: str, action: str) -> bool:
     """
     try:
         auth_service = get_auth_service()
-        return asyncio.run(auth_service.check_permission(user, resource, action))
+        return run_async(auth_service.check_permission(user, resource, action))
     except Exception as e:
         logger.exception(f"Permission check error: {e}")
         return False
@@ -277,7 +409,7 @@ def create_user_management_interface() -> None:
     # List existing users
     try:
         auth_service = get_auth_service()
-        users = asyncio.run(auth_service.list_users())
+        users = run_async(auth_service.list_users())
         
         if users:
             st.markdown("#### Existing Users")
@@ -312,7 +444,7 @@ def create_user_management_interface() -> None:
                 if new_email and new_name and new_password:
                     try:
                         role = UserRole(new_role)
-                        user = asyncio.run(auth_service.create_user(
+                        user = run_async(auth_service.create_user(
                             email=new_email,
                             password=new_password,
                             name=new_name,

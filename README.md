@@ -271,3 +271,38 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 ## License
 
 MIT
+# Seller conversation
+curl -s -X POST http://localhost:8001/api/ghl/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId":"demo-seller-1",
+    "locationId":"4YAQhK8tcmFPyt2zzsJZ",
+    "body":"I need to sell my house in 30 days",
+    "bot_type":"seller",
+    "fullName":"Demo Seller",
+    "email":"seller@example.com",
+    "phone":"+15550001111"
+  }'
+
+# Buyer conversation
+curl -s -X POST http://localhost:8001/api/ghl/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId":"demo-buyer-1",
+    "locationId":"4YAQhK8tcmFPyt2zzsJZ",
+    "body":"I want a 3 bed in Rancho Cucamonga under 700k",
+    "bot_type":"buyer",
+    "fullName":"Demo Buyer",
+    "email":"buyer@example.com",
+    "phone":"+15550002222"
+  }'
+
+# Lead analysis route through webhook dispatcher
+curl -s -X POST http://localhost:8001/api/ghl/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId":"demo-lead-1",
+    "locationId":"4YAQhK8tcmFPyt2zzsJZ",
+    "body":"Thinking about buying this summer",
+    "bot_type":"lead"
+  }'
