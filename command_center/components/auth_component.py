@@ -792,6 +792,20 @@ def _render_oauth_setup_screen(authorize_url: str) -> None:
     st.markdown(
         """
         <style>
+        /* Hide Streamlit chrome on auth/setup screens. */
+        header[data-testid="stHeader"] {
+            display: none !important;
+        }
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        [data-testid="stDecoration"] {
+            display: none !important;
+        }
+        [data-testid="stAppViewContainer"] {
+            margin-top: 0 !important;
+        }
+
         .oauth-setup-shell {
             max-width: 1200px;
             margin: 2.5rem auto 0 auto;
