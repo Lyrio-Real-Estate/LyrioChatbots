@@ -434,6 +434,9 @@ uvicorn bots.seller_bot.main:app --port 8002
 uvicorn bots.buyer_bot.main:app --port 8003
 streamlit run command_center/dashboard_v3.py --server.port 8501
 
+# OAuth v2 local-dev via ngrok (recommended for GHL OAuth login)
+python scripts/start_dashboard_with_ngrok.py
+
 # Or use launcher (only lead bot enabled currently)
 python jorge_launcher.py
 ```

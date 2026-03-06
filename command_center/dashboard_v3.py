@@ -74,11 +74,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Title
-st.title(":material/home: Jorge Real Estate AI Dashboard")
-st.markdown("**Real-time qualification, analytics, and automation**")
-
-
 def _serialize(obj: Any) -> Any:
     """Convert dataclasses/enums/datetimes to JSON-friendly structures."""
     if hasattr(obj, "__dataclass_fields__"):
@@ -349,6 +344,10 @@ if st.session_state.get("must_change_password"):
 
 if not require_permission(user, "dashboard", "read"):
     st.stop()
+
+# Page header (authenticated view only)
+st.title(":material/home: Jorge Real Estate AI Dashboard")
+st.markdown("**Real-time qualification, analytics, and automation**")
 
 
 # Sidebar controls + navigation
