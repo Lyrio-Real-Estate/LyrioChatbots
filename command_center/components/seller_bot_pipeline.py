@@ -57,12 +57,12 @@ class SellerBotPipelineViz:
 
         with col1:
             st.markdown("""
-            <h3 style='margin-bottom: 8px;'>🏠 Seller Bot Q1-Q4 Pipeline</h3>
+            <h3 style='margin-bottom: 8px;'>:material/home: Seller Bot Q1-Q4 Pipeline</h3>
             <p style='color: #6b7280; margin-top: 0; margin-bottom: 20px;'>Jorge's confrontational qualification system with CMA automation</p>
             """, unsafe_allow_html=True)
 
         with col2:
-            if st.button("🚀 Auto-Generate CMAs", help="Generate CMAs for all Q4 qualified sellers", use_container_width=True):
+            if st.button(":material/rocket_launch: Auto-Generate CMAs", help="Generate CMAs for all Q4 qualified sellers", use_container_width=True):
                 self._trigger_bulk_cma_generation()
 
         # Load seller pipeline data
@@ -217,7 +217,7 @@ class SellerBotPipelineViz:
 
     def _render_q1_q4_funnel(self, pipeline_data: List[Dict]) -> None:
         """Render Q1-Q4 qualification funnel chart"""
-        st.markdown("**🎯 Q1-Q4 Qualification Funnel**")
+        st.markdown("**:material/target: Q1-Q4 Qualification Funnel**")
 
         # Count sellers by question stage
         stage_counts = {
@@ -280,13 +280,13 @@ class SellerBotPipelineViz:
 
     def _render_temperature_distribution(self, pipeline_data: List[Dict]) -> None:
         """Render temperature distribution with CMA triggers"""
-        st.markdown("**🌡️ Temperature Breakdown**")
+        st.markdown("**:material/device_thermostat: Temperature Breakdown**")
 
         # Count by temperature
         temp_counts = {
-            "🔥 HOT": len([s for s in pipeline_data if s.get("temperature") == "hot"]),
-            "🟡 WARM": len([s for s in pipeline_data if s.get("temperature") == "warm"]),
-            "🔵 COLD": len([s for s in pipeline_data if s.get("temperature") == "cold"])
+            ":material/local_fire_department: HOT": len([s for s in pipeline_data if s.get("temperature") == "hot"]),
+            "Warm WARM": len([s for s in pipeline_data if s.get("temperature") == "warm"]),
+            ":material/circle: COLD": len([s for s in pipeline_data if s.get("temperature") == "cold"])
         }
 
         # Create donut chart with CMA indicators
@@ -324,14 +324,14 @@ class SellerBotPipelineViz:
         # CMA automation status
         if cma_ready_count > 0:
             total_commission = sum(s.get("commission_potential", 0) for s in pipeline_data if s.get("needs_cma"))
-            st.success(f"💰 ${total_commission/1000:.0f}K potential commission from CMAs")
+            st.success(f":material/payments: ${total_commission/1000:.0f}K potential commission from CMAs")
 
-            if st.button("📊 Generate Priority CMAs", key="generate_priority_cmas", use_container_width=True):
+            if st.button(":material/bar_chart: Generate Priority CMAs", key="generate_priority_cmas", use_container_width=True):
                 self._trigger_priority_cma_generation()
 
     def _render_active_conversations_table(self, pipeline_data: List[Dict]) -> None:
         """Render active conversations management table"""
-        st.markdown("**💬 Active Conversations**")
+        st.markdown("**:material/chat: Active Conversations**")
 
         # Filter active conversations (recent interactions)
         active_conversations = [
@@ -360,10 +360,10 @@ class SellerBotPipelineViz:
 
             # Get temperature emoji
             temp_emoji = {
-                "hot": "🔥",
-                "warm": "🟡",
-                "cold": "🔵"
-            }.get(seller.get("temperature"), "❓")
+                "hot": ":material/local_fire_department:",
+                "warm": "Warm",
+                "cold": ":material/circle:"
+            }.get(seller.get("temperature"), ":material/help:")
 
             # Get stage
             current_q = seller.get("current_question", 0)
@@ -392,18 +392,18 @@ class SellerBotPipelineViz:
         col1, col2 = st.columns(2)
 
         with col1:
-            if st.button("📞 Call Hot Leads", key="call_hot_leads", use_container_width=True):
+            if st.button(":material/call: Call Hot Leads", key="call_hot_leads", use_container_width=True):
                 hot_sellers = [s for s in active_conversations if s.get("temperature") == "hot"]
-                st.success(f"📞 Calling {len(hot_sellers)} hot sellers...")
+                st.success(f":material/call: Calling {len(hot_sellers)} hot sellers...")
 
         with col2:
-            if st.button("📱 Send Follow-ups", key="send_followups", use_container_width=True):
+            if st.button(":material/smartphone: Send Follow-ups", key="send_followups", use_container_width=True):
                 warm_sellers = [s for s in active_conversations if s.get("temperature") == "warm"]
-                st.success(f"📱 Sent follow-ups to {len(warm_sellers)} warm sellers...")
+                st.success(f":material/smartphone: Sent follow-ups to {len(warm_sellers)} warm sellers...")
 
     def _render_commission_tracking(self, pipeline_data: List[Dict]) -> None:
         """Render commission potential tracking"""
-        st.markdown("**💰 Commission Pipeline**")
+        st.markdown("**:material/payments: Commission Pipeline**")
 
         # Calculate commission metrics
         total_potential = sum(s.get("commission_potential", 0) for s in pipeline_data)
@@ -461,11 +461,11 @@ class SellerBotPipelineViz:
         if cma_commission > 0:
             close_probability = 0.8  # Mock close probability for Q4 sellers
             expected_commission = cma_commission * close_probability
-            st.info(f"🎯 Expected commission from CMAs: ${expected_commission/1000:.0f}K (80% close rate)")
+            st.info(f":material/target: Expected commission from CMAs: ${expected_commission/1000:.0f}K (80% close rate)")
 
     def _trigger_bulk_cma_generation(self) -> None:
         """Trigger bulk CMA generation for all qualified sellers"""
-        st.success("🚀 CMA Automation Triggered!")
+        st.success(":material/rocket_launch: CMA Automation Triggered!")
 
         # Mock progress
         progress_bar = st.progress(0)
@@ -476,12 +476,12 @@ class SellerBotPipelineViz:
         for i, seller in enumerate(sellers_to_process):
             progress_bar.progress((i + 1) / len(sellers_to_process))
             time.sleep(0.5)  # Simulate processing
-            st.write(f"✅ Generated CMA for {seller}")
+            st.write(f":material/check_circle: Generated CMA for {seller}")
 
-        st.success("🎉 All CMAs generated successfully!")
+        st.success(":material/celebration: All CMAs generated successfully!")
 
         # Show results
-        with st.expander("📊 CMA Generation Results", expanded=True):
+        with st.expander(":material/bar_chart: CMA Generation Results", expanded=True):
             st.markdown("""
             **Generated CMAs:**
             - John Smith (450 Oak St) - Est. Offer: $337K - Commission: $20K
@@ -493,9 +493,9 @@ class SellerBotPipelineViz:
 
     def _trigger_priority_cma_generation(self) -> None:
         """Trigger priority CMA generation"""
-        st.success("📊 Priority CMAs Generated!")
+        st.success(":material/bar_chart: Priority CMAs Generated!")
 
-        with st.expander("🔥 Priority CMA Results", expanded=True):
+        with st.expander(":material/local_fire_department: Priority CMA Results", expanded=True):
             st.markdown("""
             **High Priority CMAs:**
             1. Sarah Johnson ($650K property) - $487K offer - $29K commission
@@ -507,7 +507,7 @@ class SellerBotPipelineViz:
 
     def _render_loading_state(self) -> None:
         """Render loading state for seller pipeline"""
-        st.markdown("### 🏠 Seller Bot Q1-Q4 Pipeline")
+        st.markdown("### :material/home: Seller Bot Q1-Q4 Pipeline")
         st.markdown("*Loading seller qualification data...*")
 
         # Skeleton loading

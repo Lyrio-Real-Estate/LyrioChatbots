@@ -169,7 +169,7 @@ def render_login_form() -> Optional[User]:
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
     """, unsafe_allow_html=True)
     
-    st.markdown("### 🏠 Jorge's Real Estate AI")
+    st.markdown("### :material/home: Jorge's Real Estate AI")
     st.markdown("**Dashboard Login**")
     
     with st.form("login_form"):
@@ -312,16 +312,16 @@ def render_user_menu(user: User) -> None:
         user: Authenticated user
     """
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 👤 User")
+    st.sidebar.markdown("### :material/person: User")
     
     # User info
     role_emoji = {
-        'admin': '👑',
-        'agent': '🏡', 
-        'viewer': '👁️'
+        'admin': ':material/shield:',
+        'agent': ':material/real_estate_agent:', 
+        'viewer': ':material/visibility:'
     }
     
-    emoji = role_emoji.get(user.role.value, '👤')
+    emoji = role_emoji.get(user.role.value, ':material/person:')
     st.sidebar.markdown(f"**{emoji} {user.name}**")
     st.sidebar.markdown(f"*{user.role.value.title()}*")
     
@@ -366,7 +366,7 @@ def require_permission(user: User, resource: str, action: str) -> bool:
     has_permission = check_permission(user, resource, action)
     
     if not has_permission:
-        st.error(f"🚫 Access Denied: You need {action} permission for {resource}")
+        st.error(f":material/block: Access Denied: You need {action} permission for {resource}")
         st.info("Contact your administrator to request access.")
         return False
     
@@ -382,9 +382,9 @@ def render_role_badge(user: User) -> None:
     }
     
     role_labels = {
-        'admin': '👑 Admin',
-        'agent': '🏡 Agent', 
-        'viewer': '👁️ Viewer'
+        'admin': ':material/shield: Admin',
+        'agent': ':material/real_estate_agent: Agent', 
+        'viewer': ':material/visibility: Viewer'
     }
     
     color = role_colors.get(user.role.value, '#6c757d')
@@ -404,7 +404,7 @@ def render_role_badge(user: User) -> None:
 
 def create_user_management_interface() -> None:
     """Create user management interface for admins."""
-    st.markdown("### 👥 User Management")
+    st.markdown("### :material/groups: User Management")
     
     # List existing users
     try:
@@ -417,11 +417,11 @@ def create_user_management_interface() -> None:
                 col1, col2, col3 = st.columns([3, 2, 2])
                 with col1:
                     st.write(f"**{user.name}**")
-                    st.write(f"📧 {user.email}")
+                    st.write(f":material/mail: {user.email}")
                 with col2:
                     render_role_badge(user)
                 with col3:
-                    status = "✅ Active" if user.is_active else "❌ Inactive"
+                    status = ":material/check_circle: Active" if user.is_active else ":material/cancel: Inactive"
                     st.write(status)
                 st.markdown("---")
         
@@ -436,7 +436,7 @@ def create_user_management_interface() -> None:
                 new_role = st.selectbox(
                     "Role", 
                     options=['agent', 'viewer', 'admin'],
-                    format_func=lambda x: {'agent': '🏡 Agent', 'viewer': '👁️ Viewer', 'admin': '👑 Admin'}[x]
+                    format_func=lambda x: {'agent': ':material/real_estate_agent: Agent', 'viewer': ':material/visibility: Viewer', 'admin': ':material/shield: Admin'}[x]
                 )
                 new_password = st.text_input("Password", type="password")
             

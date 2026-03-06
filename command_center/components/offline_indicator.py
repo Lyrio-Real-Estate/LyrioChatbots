@@ -775,11 +775,11 @@ def get_offline_indicator_js() -> str:
                 if (!statusText) return;
                 
                 const statusIcons = {
-                    online: '🟢',
-                    offline: '🔴', 
-                    connecting: '🟡',
-                    limited: '🟠',
-                    error: '❌'
+                    online: ':material/check_circle:',
+                    offline: ':material/cancel:', 
+                    connecting: 'Warm',
+                    limited: ':material/report:',
+                    error: ':material/cancel:'
                 };
                 
                 const statusLabels = {
@@ -1146,11 +1146,11 @@ def create_offline_indicator(
     
     # Status icon and text
     status_icons = {
-        ConnectionStatus.ONLINE: "🟢",
-        ConnectionStatus.OFFLINE: "🔴",
-        ConnectionStatus.CONNECTING: "🟡",
-        ConnectionStatus.LIMITED: "🟠",
-        ConnectionStatus.ERROR: "❌"
+        ConnectionStatus.ONLINE: ":material/check_circle:",
+        ConnectionStatus.OFFLINE: ":material/cancel:",
+        ConnectionStatus.CONNECTING: "Warm",
+        ConnectionStatus.LIMITED: ":material/report:",
+        ConnectionStatus.ERROR: ":material/cancel:"
     }
     
     status_labels = {
@@ -1174,7 +1174,7 @@ def create_offline_indicator(
         container_classes.append("high-contrast")
     
     # Build the indicator HTML
-    toggle_icon = "▼" if expanded else "▶"
+    toggle_icon = "▼" if expanded else ":material/play_arrow:"
     
     indicator_html = f"""
     <div class="{' '.join(container_classes)}">
@@ -1258,7 +1258,7 @@ def get_sample_sync_queue() -> List[SyncItem]:
 # Demo function
 def demo_offline_indicator():
     """Demo function showing offline status indicator."""
-    st.header("🌐 Offline Status Indicator Demo")
+    st.header(":material/public: Offline Status Indicator Demo")
     
     # Demo controls
     col1, col2, col3 = st.columns(3)
@@ -1277,7 +1277,7 @@ def demo_offline_indicator():
         
     with col3:
         show_actions = st.checkbox("Show Action Buttons", value=True)
-        if st.button("🔄 Add Sample Sync Items"):
+        if st.button(":material/refresh: Add Sample Sync Items"):
             st.session_state.demo_sync_queue = get_sample_sync_queue()
     
     # Get sample data
@@ -1302,7 +1302,7 @@ def demo_offline_indicator():
     )
     
     # Show current sync queue details
-    if sync_queue and st.expander("📋 Current Sync Queue Details"):
+    if sync_queue and st.expander(":material/table_chart: Current Sync Queue Details"):
         for item in sync_queue:
             col_a, col_b, col_c = st.columns([2, 1, 1])
             
@@ -1318,7 +1318,7 @@ def demo_offline_indicator():
     
     # Instructions
     st.markdown("""
-    ### 🌐 Offline Status Indicator Features
+    ### :material/public: Offline Status Indicator Features
     
     **Connection Monitoring:**
     - Real-time online/offline detection

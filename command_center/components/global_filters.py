@@ -80,7 +80,7 @@ class GlobalFilters:
     def render_sidebar_filters(self):
         """Render filters in the sidebar"""
         with st.sidebar:
-            st.title("🔍 Global Filters")
+            st.title(":material/search: Global Filters")
 
             # Filter active toggle
             active = st.toggle(
@@ -116,7 +116,7 @@ class GlobalFilters:
 
     def _render_date_filter(self):
         """Render date range filter"""
-        st.subheader("📅 Date Range")
+        st.subheader(":material/calendar_month: Date Range")
 
         col1, col2 = st.columns(2)
 
@@ -163,7 +163,7 @@ class GlobalFilters:
         """Render lead qualification filters"""
 
         # Temperature filter
-        st.subheader("🌡️ Lead Temperature")
+        st.subheader(":material/device_thermostat: Lead Temperature")
         temperatures = st.multiselect(
             "Select temperatures",
             ["HOT", "WARM", "COLD"],
@@ -172,7 +172,7 @@ class GlobalFilters:
         )
 
         # Seller bot stage filter
-        st.subheader("🎯 Seller Bot Stage")
+        st.subheader(":material/target: Seller Bot Stage")
         stages = st.multiselect(
             "Select stages",
             ["Q0", "Q1", "Q2", "Q3", "Q4", "Qualified"],
@@ -181,7 +181,7 @@ class GlobalFilters:
         )
 
         # Budget range filter
-        st.subheader("💰 Budget Range")
+        st.subheader(":material/payments: Budget Range")
         col1, col2 = st.columns(2)
 
         with col1:
@@ -207,7 +207,7 @@ class GlobalFilters:
             )
 
         # Timeline filter
-        st.subheader("⏰ Timeline")
+        st.subheader(":material/schedule: Timeline")
         timelines = st.multiselect(
             "Select timelines",
             ["Immediate", "1 Month", "2 Months", "3-6 Months", "6+ Months", "No Rush"],
@@ -226,28 +226,28 @@ class GlobalFilters:
 
     def _render_filter_actions(self):
         """Render filter action buttons"""
-        st.subheader("⚡ Actions")
+        st.subheader(":material/bolt: Actions")
 
         col1, col2 = st.columns(2)
 
         with col1:
-            if st.button("🔄 Apply Filters", type="primary"):
+            if st.button(":material/refresh: Apply Filters", type="primary"):
                 st.success("Filters applied!")
                 st.rerun()
 
         with col2:
-            if st.button("🗑️ Clear All"):
+            if st.button(":material/delete: Clear All"):
                 self.clear_filters()
                 st.success("Filters cleared!")
                 st.rerun()
 
         # Export current filters
-        if st.button("📤 Export Config"):
+        if st.button(":material/upload: Export Config"):
             self._export_filter_config()
 
     def _render_filter_presets(self):
         """Render filter presets management"""
-        st.subheader("💾 Filter Presets")
+        st.subheader(":material/save: Filter Presets")
 
         # Load preset dropdown
         preset_names = list(st.session_state.filter_presets.keys())
@@ -271,7 +271,7 @@ class GlobalFilters:
             help="Name for saving current filter configuration"
         )
 
-        if new_preset_name and st.button("💾 Save Preset"):
+        if new_preset_name and st.button(":material/save: Save Preset"):
             self.save_preset(new_preset_name)
             st.success(f"Saved preset: {new_preset_name}")
             st.rerun()
@@ -286,7 +286,7 @@ class GlobalFilters:
                 help="Select a preset to delete"
             )
 
-            if preset_to_delete and st.button("🗑️ Delete Preset"):
+            if preset_to_delete and st.button(":material/delete: Delete Preset"):
                 self.delete_preset(preset_to_delete)
                 st.success(f"Deleted preset: {preset_to_delete}")
                 st.rerun()
@@ -460,7 +460,7 @@ class GlobalFilters:
         config_json = json.dumps(config, indent=2, default=str)
 
         st.download_button(
-            label="📥 Download Filter Config",
+            label=":material/download: Download Filter Config",
             data=config_json,
             file_name=f"jorge_filter_config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
             mime="application/json",

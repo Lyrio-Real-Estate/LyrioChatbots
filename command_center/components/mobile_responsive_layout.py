@@ -822,7 +822,7 @@ def apply_responsive_layout_system():
 # Demo function
 def demo_responsive_layouts():
     """Demo function showing all responsive layout components."""
-    st.header("📱 Mobile Responsive Layout System Demo")
+    st.header(":material/smartphone: Mobile Responsive Layout System Demo")
     
     # Apply layout system
     apply_responsive_layout_system()
@@ -863,13 +863,13 @@ def demo_responsive_layouts():
     st.markdown(hero_html, unsafe_allow_html=True)
     
     # Grid layout demo
-    st.subheader("📊 Responsive Grid Layout")
+    st.subheader(":material/bar_chart: Responsive Grid Layout")
     
     sample_cards = [
         create_responsive_card(
             f"""
             <div class="text-center">
-                <div style="font-size: 32px; margin-bottom: 8px;">📈</div>
+                <div style="font-size: 32px; margin-bottom: 8px;">:material/trending_up:</div>
                 <h4 class="font-semibold mb-xs">Analytics</h4>
                 <p class="text-sm text-secondary">Real-time insights</p>
             </div>
@@ -903,7 +903,7 @@ def demo_responsive_layouts():
     st.markdown(container_html, unsafe_allow_html=True)
     
     # Flex layout demo
-    st.subheader("🔄 Responsive Flex Layout")
+    st.subheader(":material/refresh: Responsive Flex Layout")
     
     flex_items = [
         '<div class="responsive-button primary">Primary Action</div>',
@@ -921,7 +921,7 @@ def demo_responsive_layouts():
     st.markdown(create_responsive_container(flex_html), unsafe_allow_html=True)
     
     # Sidebar layout demo
-    st.subheader("📋 Sidebar Layout")
+    st.subheader(":material/table_chart: Sidebar Layout")
     
     sidebar_content = """
     <h4 class="font-semibold mb-md">Quick Stats</h4>
@@ -956,22 +956,22 @@ def demo_responsive_layouts():
     st.markdown(create_responsive_container(sidebar_html), unsafe_allow_html=True)
     
     # Responsive utilities demo
-    st.subheader("👁️ Visibility Utilities")
+    st.subheader(":material/visibility: Visibility Utilities")
     
     visibility_demo = """
     <div class="responsive-card jorge-branded">
         <div class="show-mobile text-center p-lg">
-            <h4 class="text-primary font-semibold">📱 Mobile View</h4>
+            <h4 class="text-primary font-semibold">:material/smartphone: Mobile View</h4>
             <p class="text-sm">This content only shows on mobile devices (≤767px)</p>
         </div>
         
         <div class="show-tablet text-center p-lg">
-            <h4 class="text-primary font-semibold">📱 Tablet View</h4>
+            <h4 class="text-primary font-semibold">:material/smartphone: Tablet View</h4>
             <p class="text-sm">This content only shows on tablets (768px-1023px)</p>
         </div>
         
         <div class="show-desktop text-center p-lg">
-            <h4 class="text-primary font-semibold">🖥️ Desktop View</h4>
+            <h4 class="text-primary font-semibold">:material/desktop_windows: Desktop View</h4>
             <p class="text-sm">This content only shows on desktop (≥1024px)</p>
         </div>
         
@@ -985,7 +985,7 @@ def demo_responsive_layouts():
     st.markdown(create_responsive_container(visibility_demo), unsafe_allow_html=True)
     
     # Typography demo
-    st.subheader("✏️ Responsive Typography")
+    st.subheader(":material/edit: Responsive Typography")
     
     typography_demo = """
     <div class="responsive-card jorge-branded">
@@ -1001,7 +1001,7 @@ def demo_responsive_layouts():
     
     # Instructions
     st.markdown("""
-    ### 📱 Responsive Layout Features
+    ### :material/smartphone: Responsive Layout Features
     
     **Breakpoint System:**
     - **Mobile**: 320px - 767px (1-2 columns typically)

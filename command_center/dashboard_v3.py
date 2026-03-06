@@ -69,13 +69,13 @@ from command_center.components.touch_optimized_charts import ChartConfig, ChartT
 # Page config
 st.set_page_config(
     page_title="Jorge Real Estate AI Dashboard",
-    page_icon="🏠",
+    page_icon=":material/home:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # Title
-st.title("🏠 Jorge Real Estate AI Dashboard")
+st.title(":material/home: Jorge Real Estate AI Dashboard")
 st.markdown("**Real-time qualification, analytics, and automation**")
 
 
@@ -119,7 +119,7 @@ def render_overview(location_id: str) -> None:
 
 def render_conversations(location_id: str) -> None:
     st.subheader("Conversations")
-    tab1, tab2, tab3 = st.tabs(["📋 Table", "🧠 Advanced", "📡 Activity Feed"])
+    tab1, tab2, tab3 = st.tabs([":material/table_chart: Table", ":material/psychology: Advanced", ":material/rss_feed: Activity Feed"])
 
     with tab1:
         dashboard_data = load_dashboard_data()
@@ -160,7 +160,7 @@ def render_pipeline(location_id: str) -> None:
 
 def render_analytics(location_id: str) -> None:
     st.subheader("Analytics")
-    tab1, tab2, tab3 = st.tabs(["⚡ Performance", "💰 Commission", "🧠 Lead Intelligence"])
+    tab1, tab2, tab3 = st.tabs([":material/bolt: Performance", ":material/payments: Commission", ":material/psychology: Lead Intelligence"])
 
     with tab1:
         PerformanceAnalyticsComponent().render()
@@ -175,7 +175,7 @@ def render_analytics(location_id: str) -> None:
 
 def render_integrations(location_id: str) -> None:
     st.subheader("Integrations")
-    tab1, tab2 = st.tabs(["🔗 GHL Status UI", "🧾 Raw Status Data"])
+    tab1, tab2 = st.tabs([":material/link: GHL Status UI", ":material/receipt_long: Raw Status Data"])
 
     with tab1:
         if location_id:
@@ -199,13 +199,13 @@ def render_mobile(location_id: str) -> None:
     st.subheader("Mobile Experience")
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
-            "📱 Integrated Demo",
-            "📊 Metrics Cards",
-            "🧭 Navigation",
-            "🧱 Responsive Layout",
-            "📈 Touch Charts",
-            "🛜 Offline Indicator",
-            "🚗 Field Access",
+            ":material/smartphone: Integrated Demo",
+            ":material/bar_chart: Metrics Cards",
+            ":material/explore: Navigation",
+            ":material/view_module: Responsive Layout",
+            ":material/trending_up: Touch Charts",
+            ":material/wifi_off: Offline Indicator",
+            ":material/directions_car: Field Access",
         ]
     )
 
@@ -247,7 +247,7 @@ def render_mobile(location_id: str) -> None:
         chart_data = sample_data["leads_data"].head(30)
         chart = ChartConfig(
             chart_type=ChartType.LINE,
-            title="📈 Lead Velocity",
+            title=":material/trending_up: Lead Velocity",
             data=chart_data,
             x_column="date",
             y_column="leads",
@@ -368,7 +368,7 @@ with st.sidebar:
 
     auto_refresh = st.checkbox("Auto-refresh (30s)", value=True)
 
-    if st.button("🔄 Refresh Now"):
+    if st.button(":material/refresh: Refresh Now"):
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 
