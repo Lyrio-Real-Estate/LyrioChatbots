@@ -962,9 +962,7 @@ def _render_oauth_setup_screen(authorize_url: str) -> None:
             </ol>
             <hr class="oauth-divider" />
             <div class="oauth-callout">Connect your GoHighLevel account to continue.</div>
-            <form class="oauth-connect-form" action="{safe_authorize_url}" method="get" target="_self">
-                <button class="oauth-connect-link" type="submit">Connect GoHighLevel</button>
-            </form>
+            <a class="oauth-connect-link" href="{safe_authorize_url}" target="_blank" rel="noopener noreferrer">Connect GoHighLevel</a>
         </section>
         """,
         unsafe_allow_html=True,
