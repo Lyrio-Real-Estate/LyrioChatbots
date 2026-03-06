@@ -57,7 +57,7 @@ class ActiveConversationsComponent:
         - Summary statistics
         - Stage distribution chart
         """
-        st.header(":material/forum: Active Seller Conversations")
+        st.header("Active Seller Conversations")
 
         # Initialize session state for filters
         if 'conversations_filters' not in st.session_state:
@@ -87,7 +87,7 @@ class ActiveConversationsComponent:
 
     def _render_filter_controls(self) -> ConversationFilters:
         """Render filter controls and return current filters."""
-        with st.expander(":material/search: Filter Conversations", expanded=False):
+        with st.expander("Filter Conversations", expanded=False):
             col1, col2, col3 = st.columns(3)
 
             with col1:
@@ -139,7 +139,7 @@ class ActiveConversationsComponent:
                 )
 
             # Apply filters button
-            if st.button(":material/refresh: Apply Filters", key="apply_conv_filters"):
+            if st.button("Apply Filters", key="apply_conv_filters"):
                 st.session_state.conversations_page = 1  # Reset to first page
 
         # Build filters object
@@ -190,7 +190,7 @@ class ActiveConversationsComponent:
             # Calculate temperature distribution
             hot_count = sum(1 for c in conversations_data.conversations if c.temperature == Temperature.HOT)
             st.metric(
-                ":material/local_fire_department: HOT Leads",
+                "HOT Leads",
                 hot_count,
                 help="High-priority conversations requiring immediate attention"
             )
@@ -199,7 +199,7 @@ class ActiveConversationsComponent:
             # Calculate qualified count
             qualified_count = sum(1 for c in conversations_data.conversations if c.is_qualified)
             st.metric(
-                ":material/check_circle: Qualified",
+                "Qualified",
                 qualified_count,
                 help="Sellers who completed Q4 qualification"
             )
@@ -213,7 +213,7 @@ class ActiveConversationsComponent:
             ]
             avg_response_hours = sum(response_times) / len(response_times) if response_times else 0
             st.metric(
-                ":material/timer: Avg Response",
+                "Avg Response",
                 f"{avg_response_hours:.1f}h",
                 help="Average time since last seller response"
             )
@@ -233,7 +233,7 @@ class ActiveConversationsComponent:
                 'Property': conv.property_address or "Not provided",
                 'Price Exp.': f"${conv.price_expectation:,}" if conv.price_expectation else "TBD",
                 'Last Activity': self._format_time_ago(conv.last_activity),
-                'CMA': ":material/check_circle:" if conv.cma_triggered else ":material/hourglass_top:",
+                'CMA': "" if conv.cma_triggered else "",
                 'Contact ID': conv.contact_id,  # Hidden column for actions
             })
 
@@ -257,9 +257,9 @@ class ActiveConversationsComponent:
                         help="Current conversation stage (Q0-Q4)"
                     ),
                     'Temp': st.column_config.TextColumn(
-                        ":material/device_thermostat:",
+                        "",
                         width="small",
-                        help="Lead temperature: :material/local_fire_department:=HOT, Warm=WARM, Cold=COLD"
+                        help="Lead temperature: =HOT, Warm=WARM, Cold=COLD"
                     ),
                     'Q#': st.column_config.TextColumn(
                         "Progress",
@@ -284,7 +284,7 @@ class ActiveConversationsComponent:
                     'CMA': st.column_config.TextColumn(
                         "CMA",
                         width="small",
-                        help="CMA status: :material/check_circle:=Completed, :material/hourglass_top:=Pending"
+                        help="CMA status: =Completed, =Pending"
                     ),
                 }
             )
@@ -317,23 +317,23 @@ class ActiveConversationsComponent:
 
             if selected_conv:
                 with col2:
-                    if st.button(f":material/visibility: View Details", key=f"view_{contact_id}"):
+                    if st.button(f"View Details", key=f"view_{contact_id}"):
                         self._show_conversation_details(selected_conv)
 
                 with col3:
                     if not selected_conv.cma_triggered:
-                        if st.button(f":material/bar_chart: Trigger CMA", key=f"cma_{contact_id}"):
+                        if st.button(f"Trigger CMA", key=f"cma_{contact_id}"):
                             self._trigger_cma(selected_conv)
                     else:
-                        st.button(":material/check_circle: CMA Sent", disabled=True, key=f"cma_sent_{contact_id}")
+                        st.button("CMA Sent", disabled=True, key=f"cma_sent_{contact_id}")
 
                 with col4:
                     next_stage = self._get_next_stage(selected_conv.stage)
                     if next_stage:
-                        if st.button(f":material/arrow_forward: Advance to {next_stage}", key=f"advance_{contact_id}"):
+                        if st.button(f"Advance to {next_stage}", key=f"advance_{contact_id}"):
                             self._advance_stage(selected_conv, next_stage)
                     else:
-                        st.button(":material/target: Qualified", disabled=True, key=f"qualified_{contact_id}")
+                        st.button("Qualified", disabled=True, key=f"qualified_{contact_id}")
 
     def _render_pagination_controls(self, conversations_data) -> None:
         """Render pagination controls for conversation navigation."""
@@ -343,12 +343,12 @@ class ActiveConversationsComponent:
             col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
 
             with col1:
-                if st.button(":material/first_page: First", disabled=not conversations_data.has_prev, key="conv_first_page"):
+                if st.button("First", disabled=not conversations_data.has_prev, key="conv_first_page"):
                     st.session_state.conversations_page = 1
                     st.rerun()
 
             with col2:
-                if st.button(":material/chevron_left: Previous", disabled=not conversations_data.has_prev, key="conv_prev_page"):
+                if st.button("Previous", disabled=not conversations_data.has_prev, key="conv_prev_page"):
                     st.session_state.conversations_page = max(1, conversations_data.page - 1)
                     st.rerun()
 
@@ -357,18 +357,18 @@ class ActiveConversationsComponent:
                         f"({conversations_data.total_count} total conversations)")
 
             with col4:
-                if st.button("Next :material/arrow_forward:", disabled=not conversations_data.has_next, key="conv_next_page"):
+                if st.button("Next ", disabled=not conversations_data.has_next, key="conv_next_page"):
                     st.session_state.conversations_page = conversations_data.page + 1
                     st.rerun()
 
             with col5:
-                if st.button("Last :material/last_page:", disabled=not conversations_data.has_next, key="conv_last_page"):
+                if st.button("Last ", disabled=not conversations_data.has_next, key="conv_last_page"):
                     st.session_state.conversations_page = conversations_data.total_pages
                     st.rerun()
 
     def _render_stage_distribution_chart(self, conversations_data) -> None:
         """Render stage distribution chart."""
-        st.subheader(":material/bar_chart: Stage Distribution")
+        st.subheader("Stage Distribution")
 
         # Count conversations by stage
         stage_counts = {}
@@ -403,12 +403,12 @@ class ActiveConversationsComponent:
 
     def _render_empty_state(self) -> None:
         """Render empty state when no conversations are found."""
-        st.info(":material/search: No active conversations found. This could mean:")
+        st.info("No active conversations found. This could mean:")
         st.write("• All leads are in nurturing phase")
         st.write("• Filters are too restrictive")
         st.write("• No new seller inquiries recently")
 
-        if st.button(":material/refresh: Clear All Filters", key="clear_conv_filters"):
+        if st.button("Clear All Filters", key="clear_conv_filters"):
             # Reset all filter session state
             for key in list(st.session_state.keys()):
                 if key.startswith('conv_'):
@@ -449,7 +449,7 @@ class ActiveConversationsComponent:
                 timeout=10,
             )
             if resp.ok:
-                st.success(f":material/bar_chart: CMA triggered for {conv.seller_name}!")
+                st.success(f"CMA triggered for {conv.seller_name}!")
                 st.info("CMA request tagged in GHL — workflow will fire automatically.")
             else:
                 st.warning(f"CMA request returned {resp.status_code}: {resp.text[:200]}")
@@ -473,7 +473,7 @@ class ActiveConversationsComponent:
                 timeout=10,
             )
             if resp.ok:
-                st.success(f":material/arrow_forward: {conv.seller_name} advanced to {next_stage}!")
+                st.success(f"{conv.seller_name} advanced to {next_stage}!")
                 st.info("Stage updated in seller bot — next question sequence initiated.")
             else:
                 st.warning(f"Stage advance returned {resp.status_code}: {resp.text[:200]}")
@@ -484,11 +484,11 @@ class ActiveConversationsComponent:
     def _get_temperature_emoji(self, temperature: Temperature) -> str:
         """Get emoji representation for temperature."""
         emoji_map = {
-            Temperature.HOT: ":material/local_fire_department:",
+            Temperature.HOT: "",
             Temperature.WARM: "Warm",
             Temperature.COLD: "Cold"
         }
-        return emoji_map.get(temperature, ":material/help:")
+        return emoji_map.get(temperature, "")
 
     def _get_next_stage(self, current_stage: ConversationStage) -> Optional[str]:
         """Get the next conversation stage."""
@@ -546,7 +546,7 @@ if __name__ == "__main__":
     # For testing the component standalone
     st.set_page_config(
         page_title="Active Conversations",
-        page_icon=":material/forum:",
+        page_icon="",
         layout="wide"
     )
     render_active_conversations()

@@ -18,6 +18,7 @@ from bots.shared.calendar_booking_service import FALLBACK_MESSAGE, CalendarBooki
 from bots.shared.claude_client import ClaudeClient
 from bots.shared.config import settings
 from bots.shared.ghl_client import GHLClient
+from bots.shared.ghl_oauth_token_store import get_ghl_oauth_token_store
 from bots.shared.logger import get_logger
 from database.repository import (
     fetch_conversation,
@@ -130,6 +131,19 @@ class JorgeBuyerBot:
         self.logger = get_logger(__name__)
         self.calendar_service = CalendarBookingService(self.ghl_client)
 
+    async def _get_ghl_client_for_location(self, location_id: str) -> GHLClient:
+        """Resolve tenant-scoped GHL client for location with fallback to default client."""
+        location = (location_id or "").strip()
+        if not location:
+            return self.ghl_client
+        try:
+            token_store = get_ghl_oauth_token_store()
+            resolved = await token_store.build_client(location, fallback_client=self.ghl_client)
+            return resolved or self.ghl_client
+        except Exception as exc:
+            self.logger.warning(f"Failed tenant GHL client lookup for location {location}: {exc}")
+            return self.ghl_client
+
     async def process_buyer_message(
         self,
         contact_id: str,
@@ -137,13 +151,15 @@ class JorgeBuyerBot:
         message: str,
         contact_info: Optional[Dict[str, Any]] = None,
     ) -> BuyerResult:
+        ghl_client = await self._get_ghl_client_for_location(location_id)
+
         # --- Jorge-Active takeover check ---
         if contact_info is not None:
             _tags: list = contact_info.get("tags") or []
         else:
             _tags = []
             try:
-                _contact_data = await self.ghl_client.get_contact(contact_id)
+                _contact_data = await ghl_client.get_contact(contact_id)
                 _payload = _contact_data.get("data", _contact_data) if isinstance(_contact_data, dict) else {}
                 _contact = _payload.get("contact", _payload) if isinstance(_payload, dict) else {}
                 _tags = _contact.get("tags") or []
@@ -169,7 +185,7 @@ class JorgeBuyerBot:
             slot_index = self.calendar_service.detect_slot_selection(message, contact_id)
             if slot_index is not None:
                 booking = await self.calendar_service.book_appointment(
-                    contact_id, slot_index, "buyer"
+                    contact_id, slot_index, "buyer", ghl_client=ghl_client
                 )
                 if booking["success"]:
                     state.appointment_booked = True
@@ -242,7 +258,7 @@ class JorgeBuyerBot:
         if _offer_scheduling:
             if temperature == BuyerStatus.HOT:
                 sched = await self.calendar_service.offer_appointment_slots(
-                    contact_id, "buyer"
+                    contact_id, "buyer", ghl_client=ghl_client
                 )
             else:
                 sched = {"message": FALLBACK_MESSAGE}
@@ -679,15 +695,17 @@ class JorgeBuyerBot:
             })
             state.opportunity_created = True
 
-        await self._apply_ghl_actions(contact_id, actions)
+        await self._apply_ghl_actions(contact_id, location_id, actions)
         return actions
 
-    async def _apply_ghl_actions(self, contact_id: str, actions: List[Dict[str, Any]]) -> None:
+    async def _apply_ghl_actions(self, contact_id: str, location_id: str, actions: List[Dict[str, Any]]) -> None:
         """Apply non-tag actions to GHL contact.
 
         Tags (add_tag / remove_tag) are deferred 30 s by the webhook route via
         BackgroundTasks so GHL workflows fire *after* the SMS is delivered.
         """
+        ghl_client = await self._get_ghl_client_for_location(location_id)
+
         for action in actions:
             action_type = action.get("type")
             try:
@@ -695,12 +713,12 @@ class JorgeBuyerBot:
                 if action_type in ("add_tag", "remove_tag"):
                     continue
                 elif action_type == "update_custom_field":
-                    await self.ghl_client.update_custom_field(contact_id, action["field"], action["value"])
+                    await ghl_client.update_custom_field(contact_id, action["field"], action["value"])
                 elif action_type == "trigger_workflow":
-                    await self.ghl_client.trigger_workflow(contact_id, action.get("workflow_id"))
+                    await ghl_client.trigger_workflow(contact_id, action.get("workflow_id"))
                 elif action_type == "upsert_opportunity":
                     # Minimal: create new opportunity
-                    await self.ghl_client.create_opportunity({
+                    await ghl_client.create_opportunity({
                         "name": f"Buyer {contact_id}",
                         "contactId": contact_id,
                         "pipelineId": action.get("pipeline_id"),

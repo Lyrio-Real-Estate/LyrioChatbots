@@ -321,7 +321,7 @@ def create_dashboard_metrics() -> List[MetricCard]:
             id="total_leads",
             title="Total Leads",
             value=1247,
-            icon=":material/groups:",
+            icon="",
             state=MetricState.SUCCESS,
             change_percentage=18.5,
             change_period="vs last month"
@@ -330,7 +330,7 @@ def create_dashboard_metrics() -> List[MetricCard]:
             id="active_listings",
             title="Active Listings",
             value=89,
-            icon=":material/home:",
+            icon="",
             state=MetricState.INFO,
             change_percentage=12.3,
             change_period="this quarter"
@@ -339,7 +339,7 @@ def create_dashboard_metrics() -> List[MetricCard]:
             id="monthly_revenue",
             title="Revenue (30d)",
             value=186500,
-            icon=":material/payments:",
+            icon="",
             state=MetricState.SUCCESS,
             change_percentage=24.7,
             change_period="vs last month"
@@ -348,7 +348,7 @@ def create_dashboard_metrics() -> List[MetricCard]:
             id="avg_response",
             title="Response Time",
             value="3.2m",
-            icon=":material/timer:",
+            icon="",
             state=MetricState.SUCCESS,
             change_percentage=-22.1,
             change_period="improvement"
@@ -357,7 +357,7 @@ def create_dashboard_metrics() -> List[MetricCard]:
             id="conversion_rate",
             title="Conversion Rate",
             value="12.8%",
-            icon=":material/bar_chart:",
+            icon="",
             state=MetricState.WARNING,
             change_percentage=-4.2,
             change_period="this month"
@@ -366,7 +366,7 @@ def create_dashboard_metrics() -> List[MetricCard]:
             id="pipeline_value",
             title="Pipeline Value",
             value=2450000,
-            icon=":material/diamond:",
+            icon="",
             state=MetricState.INFO,
             change_percentage=31.5,
             change_period="total"
@@ -379,7 +379,7 @@ def create_dashboard_charts(data: Dict[str, Any]) -> List[ChartConfig]:
     return [
         ChartConfig(
             chart_type=ChartType.LINE,
-            title=":material/trending_up: Daily Lead Generation",
+            title="Daily Lead Generation",
             data=data['leads_data'].head(90),  # Last 90 days
             x_column='date',
             y_column='leads',
@@ -388,7 +388,7 @@ def create_dashboard_charts(data: Dict[str, Any]) -> List[ChartConfig]:
         ),
         ChartConfig(
             chart_type=ChartType.BAR,
-            title=":material/payments: Monthly Revenue",
+            title="Monthly Revenue",
             data=data['revenue_data'],
             x_column='month',
             y_column='revenue',
@@ -396,7 +396,7 @@ def create_dashboard_charts(data: Dict[str, Any]) -> List[ChartConfig]:
         ),
         ChartConfig(
             chart_type=ChartType.PIE,
-            title=":material/home: Property Types",
+            title="Property Types",
             data=data['property_data'],
             x_column='type',
             y_column='count',
@@ -408,12 +408,12 @@ def create_dashboard_charts(data: Dict[str, Any]) -> List[ChartConfig]:
 def render_quick_actions() -> str:
     """Renders quick action buttons for real estate workflows."""
     actions = [
-        {'icon': ':material/call:', 'label': 'Call Lead'},
-        {'icon': ':material/mail:', 'label': 'Send Email'},
-        {'icon': ':material/calendar_month:', 'label': 'Schedule'},
-        {'icon': ':material/edit_note:', 'label': 'Add Note'},
-        {'icon': ':material/bar_chart:', 'label': 'View Stats'},
-        {'icon': ':material/smartphone:', 'label': 'Text Client'}
+        {'icon': '', 'label': 'Call Lead'},
+        {'icon': '', 'label': 'Send Email'},
+        {'icon': '', 'label': 'Schedule'},
+        {'icon': '', 'label': 'Add Note'},
+        {'icon': '', 'label': 'View Stats'},
+        {'icon': '', 'label': 'Text Client'}
     ]
     
     actions_html = ""
@@ -483,26 +483,26 @@ def render_mobile_dashboard_tab(tab_name: str, data: Dict[str, Any]) -> None:
         st.markdown(f"""
         <div class="jorge-dashboard-header">
             <div class="jorge-dashboard-time">{current_time}</div>
-            <h1 class="jorge-dashboard-title">:material/home: Jorge's Real Estate AI</h1>
+            <h1 class="jorge-dashboard-title">Jorge's Real Estate AI</h1>
             <p class="jorge-dashboard-subtitle">Mobile Command Center</p>
         </div>
         """, unsafe_allow_html=True)
         
         # Key metrics
-        st.markdown('<h2 class="jorge-section-title">:material/bar_chart: Key Metrics</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Key Metrics</h2>', unsafe_allow_html=True)
         metrics = create_dashboard_metrics()
         render_mobile_metrics_cards(metrics, title="", show_refresh=True)
         
         # Quick actions
-        st.markdown('<h2 class="jorge-section-title">:material/bolt: Quick Actions</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Quick Actions</h2>', unsafe_allow_html=True)
         st.markdown(render_quick_actions(), unsafe_allow_html=True)
         
         # Recent activity
-        st.markdown('<h2 class="jorge-section-title">:material/table_chart: Recent Activity</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Recent Activity</h2>', unsafe_allow_html=True)
         st.markdown(render_recent_activity(), unsafe_allow_html=True)
     
     elif tab_name == "analytics":
-        st.markdown('<h2 class="jorge-section-title">:material/trending_up: Performance Analytics</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Performance Analytics</h2>', unsafe_allow_html=True)
         
         charts = create_dashboard_charts(data)
         
@@ -514,7 +514,7 @@ def render_mobile_dashboard_tab(tab_name: str, data: Dict[str, Any]) -> None:
             st.markdown('<div class="jorge-section-divider"></div>', unsafe_allow_html=True)
     
     elif tab_name == "quick-add":
-        st.markdown('<h2 class="jorge-section-title">:material/add_circle: Quick Add</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Quick Add</h2>', unsafe_allow_html=True)
         
         # Quick add form (simplified for demo)
         st.markdown(create_responsive_card("""
@@ -564,7 +564,7 @@ def render_mobile_dashboard_tab(tab_name: str, data: Dict[str, Any]) -> None:
         """, jorge_branded=True), unsafe_allow_html=True)
     
     elif tab_name == "chats":
-        st.markdown('<h2 class="jorge-section-title">:material/forum: Active Conversations</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Active Conversations</h2>', unsafe_allow_html=True)
         
         # Conversation list (simplified for demo)
         conversations = [
@@ -597,7 +597,7 @@ def render_mobile_dashboard_tab(tab_name: str, data: Dict[str, Any]) -> None:
         st.markdown(f'<div class="jorge-mobile-table">{conversations_html}</div>', unsafe_allow_html=True)
     
     elif tab_name == "profile":
-        st.markdown('<h2 class="jorge-section-title">:material/person: Profile & Settings</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="jorge-section-title">Profile & Settings</h2>', unsafe_allow_html=True)
         
         # Profile card
         st.markdown(create_responsive_card("""
@@ -607,18 +607,18 @@ def render_mobile_dashboard_tab(tab_name: str, data: Dict[str, Any]) -> None:
             </div>
             <h3 style="margin: 0 0 4px;">Jorge Agent</h3>
             <p style="margin: 0; color: #6b7280; font-size: 14px;">Senior Real Estate Professional</p>
-            <p style="margin: 8px 0 0; color: #6b7280; font-size: 12px;">:material/location_on: Downtown District • :material/star: 4.9 Rating</p>
+            <p style="margin: 8px 0 0; color: #6b7280; font-size: 12px;">Downtown District • 4.9 Rating</p>
         </div>
         """, jorge_branded=True), unsafe_allow_html=True)
         
         # Settings menu
         settings_items = [
-            {'icon': ':material/notifications:', 'title': 'Notifications', 'subtitle': 'Push, email, SMS preferences'},
-            {'icon': ':material/palette:', 'title': 'Appearance', 'subtitle': 'Theme, contrast, layout'},
-            {'icon': ':material/bar_chart:', 'title': 'Analytics', 'subtitle': 'Data export, reporting'},
-            {'icon': ':material/lock:', 'title': 'Privacy', 'subtitle': 'Data sharing, permissions'},
-            {'icon': ':material/help:', 'title': 'Help & Support', 'subtitle': 'Documentation, contact'},
-            {'icon': ':material/settings:', 'title': 'Advanced', 'subtitle': 'Developer options, sync'},
+            {'icon': '', 'title': 'Notifications', 'subtitle': 'Push, email, SMS preferences'},
+            {'icon': '', 'title': 'Appearance', 'subtitle': 'Theme, contrast, layout'},
+            {'icon': '', 'title': 'Analytics', 'subtitle': 'Data export, reporting'},
+            {'icon': '', 'title': 'Privacy', 'subtitle': 'Data sharing, permissions'},
+            {'icon': '', 'title': 'Help & Support', 'subtitle': 'Documentation, contact'},
+            {'icon': '', 'title': 'Advanced', 'subtitle': 'Developer options, sync'},
         ]
         
         settings_html = ""
@@ -691,15 +691,14 @@ def create_integrated_mobile_dashboard():
     # Floating action button
     st.markdown("""
     <button class="jorge-fab" title="Quick Add">
-        :material/add_circle:
-    </button>
+            </button>
     """, unsafe_allow_html=True)
 
 
 # Tab switching demo (for demonstration purposes)
 def handle_tab_switching_demo():
     """Handles tab switching for demonstration purposes."""
-    st.sidebar.header(":material/sports_esports: Demo Controls")
+    st.sidebar.header("Demo Controls")
     
     # Tab selection
     selected_tab = st.sidebar.selectbox(
@@ -713,14 +712,14 @@ def handle_tab_switching_demo():
         st.rerun()
     
     # Demo options
-    st.sidebar.subheader(":material/build: Component Options")
+    st.sidebar.subheader("Component Options")
     
     show_field_dashboard = st.sidebar.checkbox("Show Field Dashboard", value=False)
     high_contrast_mode = st.sidebar.checkbox("High Contrast Mode", value=False)
     
     if show_field_dashboard:
         st.sidebar.markdown("---")
-        st.sidebar.subheader(":material/home: Field Access Dashboard")
+        st.sidebar.subheader("Field Access Dashboard")
         
         create_field_access_dashboard(
             current_location=(40.7589, -73.9851),
@@ -738,7 +737,7 @@ def demo_integrated_mobile_dashboard():
     
     st.set_page_config(
         page_title="Jorge's Mobile Dashboard",
-        page_icon=":material/home:",
+        page_icon="",
         layout="wide",
         initial_sidebar_state="auto"
     )
@@ -752,15 +751,15 @@ def demo_integrated_mobile_dashboard():
     # Instructions in sidebar
     st.sidebar.markdown("---")
     st.sidebar.markdown("""
-    ### :material/smartphone: Integrated Mobile Dashboard
+    ### Integrated Mobile Dashboard
     
     **Components Included:**
-    - :material/check_circle: Mobile Navigation (Bottom bar)
-    - :material/check_circle: Mobile Metrics Cards (Horizontal scroll)
-    - :material/check_circle: Touch-Optimized Charts (Real estate data)
-    - :material/check_circle: Field Access Dashboard (GPS, voice, photos)
-    - :material/check_circle: Responsive Layout System (Mobile-first)
-    - :material/check_circle: Offline Indicator (Connection status)
+    - Mobile Navigation (Bottom bar)
+    - Mobile Metrics Cards (Horizontal scroll)
+    - Touch-Optimized Charts (Real estate data)
+    - Field Access Dashboard (GPS, voice, photos)
+    - Responsive Layout System (Mobile-first)
+    - Offline Indicator (Connection status)
     
     **Touch Interactions:**
     - Tap navigation items to switch tabs

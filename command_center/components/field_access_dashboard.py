@@ -644,11 +644,11 @@ def get_field_access_js() -> str:
 
                 if (button && container) {
                     if (recording) {
-                        button.textContent = ':material/stop_circle:';
+                        button.textContent = '';
                         button.classList.add('recording');
                         container.classList.add('recording');
                     } else {
-                        button.textContent = ':material/mic:';
+                        button.textContent = '';
                         button.classList.remove('recording');
                         container.classList.remove('recording');
                     }
@@ -932,7 +932,7 @@ def render_location_display(
     
     return f"""
     <div class="field-location">
-        <div class="field-location-icon">:material/location_on:</div>
+        <div class="field-location-icon"></div>
         <div class="field-location-info">
             <div class="field-location-address">{display_address}</div>
             <div class="field-location-coords">{coords_text}</div>
@@ -947,42 +947,42 @@ def render_field_actions() -> str:
     actions = [
         {
             'id': 'check_in',
-            'icon': ':material/location_on:',
+            'icon': '',
             'label': 'Check In',
             'sublabel': 'Property visit',
             'class': 'primary'
         },
         {
             'id': 'voice_note',
-            'icon': ':material/mic:',
+            'icon': '',
             'label': 'Voice Note',
             'sublabel': 'Record audio',
             'class': ''
         },
         {
             'id': 'photo_upload',
-            'icon': ':material/photo_camera:',
+            'icon': '',
             'label': 'Take Photos',
             'sublabel': 'Property images',
             'class': ''
         },
         {
             'id': 'client_meeting',
-            'icon': ':material/handshake:',
+            'icon': '',
             'label': 'Client Meeting',
             'sublabel': 'Log interaction',
             'class': 'success'
         },
         {
             'id': 'inspection',
-            'icon': ':material/search:',
+            'icon': '',
             'label': 'Inspection',
             'sublabel': 'Property review',
             'class': ''
         },
         {
             'id': 'emergency',
-            'icon': ':material/error:',
+            'icon': '',
             'label': 'Emergency',
             'sublabel': 'Urgent contact',
             'class': 'warning'
@@ -1010,7 +1010,7 @@ def render_voice_recorder() -> str:
     """Renders the voice recording interface."""
     return """
     <div class="field-voice-recorder">
-        <button class="field-voice-record-button">:material/mic:</button>
+        <button class="field-voice-record-button"></button>
         <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">Voice Notes</div>
         <div style="font-size: 12px; color: #6b7280;">Tap and hold to record, release to stop</div>
     </div>
@@ -1021,7 +1021,7 @@ def render_photo_upload() -> str:
     """Renders the photo upload interface."""
     return """
     <div class="field-photo-upload">
-        <div style="font-size: 32px; margin-bottom: 8px;">:material/photo_camera:</div>
+        <div style="font-size: 32px; margin-bottom: 8px;"></div>
         <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">Property Photos</div>
         <div style="font-size: 12px; color: #6b7280;">Tap to capture or drag images here</div>
         <div class="field-photo-preview"></div>
@@ -1102,7 +1102,7 @@ def create_field_access_dashboard(
         
         <div class="field-header">
             <h3 class="field-title">
-                :material/home: Field Operations
+                Field Operations
             </h3>
             {status_badge}
         </div>
@@ -1158,7 +1158,7 @@ def get_sample_sync_queue() -> List[FieldAction]:
 # Demo function
 def demo_field_access_dashboard():
     """Demo function showing field access dashboard."""
-    st.header(":material/home: Field Access Dashboard Demo")
+    st.header("Field Access Dashboard Demo")
     
     # Demo controls
     col1, col2, col3 = st.columns(3)
@@ -1176,7 +1176,7 @@ def demo_field_access_dashboard():
         address = st.text_input("Address", value="123 Main Street, New York, NY")
     
     # Sample sync queue
-    if st.button(":material/refresh: Add Sample Actions to Queue"):
+    if st.button("Add Sample Actions to Queue"):
         st.session_state.sync_queue = get_sample_sync_queue()
     
     sync_queue = st.session_state.get('sync_queue', [])
@@ -1193,7 +1193,7 @@ def demo_field_access_dashboard():
     
     # Instructions
     st.markdown("""
-    ### :material/home: Field Access Dashboard Features
+    ### Field Access Dashboard Features
     
     **GPS & Location:**
     - Automatic location acquisition with high accuracy

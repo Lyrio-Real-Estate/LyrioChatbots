@@ -117,7 +117,7 @@ def test_consume_ghl_oauth_callback_authenticates_existing_user(monkeypatch):
 
     async def _fake_exchange(code):
         assert code == "code_abc"
-        return {"access_token": "ghl_token"}
+        return {"access_token": "ghl_token", "locationId": "loc_123"}
 
     async def _fake_userinfo(access_token):
         assert access_token == "ghl_token"
@@ -259,7 +259,7 @@ def test_consume_ghl_oauth_callback_auto_creates_user_when_missing(monkeypatch):
 
     async def _fake_exchange(code):
         assert code == "code_abc"
-        return {"access_token": "ghl_token"}
+        return {"access_token": "ghl_token", "locationId": "loc_123"}
 
     async def _fake_userinfo(access_token):
         assert access_token == "ghl_token"
@@ -302,6 +302,9 @@ def test_consume_ghl_oauth_callback_auto_creates_user_when_missing(monkeypatch):
     assert authenticated.email == "new.customer@example.com"
     assert st.session_state.auth_token == "access_new"
     assert st.session_state.refresh_token == "refresh_new"
+    assert st.session_state.oauth_location_id == "loc_123"
+    assert st.session_state.location_id == "loc_123"
+    assert st.session_state.user["location_id"] == "loc_123"
     assert "code" not in st.query_params
 
 

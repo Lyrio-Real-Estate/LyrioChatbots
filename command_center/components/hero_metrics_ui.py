@@ -1,7 +1,7 @@
 """
 Hero Metrics UI Renderer - Mobile-Responsive Streamlit Interface
 
-Renders Jorge's enhanced hero metrics with superior UX:
+Renders enhanced hero metrics with superior UX:
 - Mobile-responsive card layout
 - Interactive action buttons
 - Urgency-based color coding
@@ -11,6 +11,8 @@ Renders Jorge's enhanced hero metrics with superior UX:
 Author: Claude Code Assistant
 Created: 2026-01-23
 """
+import html
+import os
 from typing import List
 
 import streamlit as st
@@ -33,16 +35,24 @@ class HeroMetricsUI:
             location_id: GHL location ID for data filtering
         """
         # Section header with refresh control
+        roi_title = html.escape((os.getenv("DASHBOARD_ROI_TITLE") or "ROI Command Center").strip() or "ROI Command Center")
+        roi_subtitle = html.escape(
+            (os.getenv("DASHBOARD_ROI_SUBTITLE") or "Real-time business intelligence for maximum ROI").strip()
+            or "Real-time business intelligence for maximum ROI"
+        )
         col1, col2 = st.columns([4, 1])
 
         with col1:
-            st.markdown("""
-            <h2 style='margin-bottom: 0;'>:material/target: Jorge's ROI Command Center</h2>
-            <p style='color: #6b7280; margin-top: 0;'>Real-time business intelligence for maximum ROI</p>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <h2 style='margin-bottom: 0;'>{roi_title}</h2>
+                <p style='color: #6b7280; margin-top: 0;'>{roi_subtitle}</p>
+                """,
+                unsafe_allow_html=True,
+            )
 
         with col2:
-            if st.button(":material/refresh:", help="Refresh metrics", key="refresh_hero_metrics"):
+            if st.button("", help="Refresh metrics", key="refresh_hero_metrics"):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -229,29 +239,29 @@ class HeroMetricsUI:
             return
 
         st.markdown("---")
-        st.markdown("### :material/rocket_launch: Quick Actions")
+        st.markdown("### Quick Actions")
 
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            if st.button(":material/bar_chart: Generate All CMAs", help="Auto-generate CMAs for all Q4 sellers", use_container_width=True):
+            if st.button("Generate All CMAs", help="Auto-generate CMAs for all Q4 sellers", use_container_width=True):
                 self._trigger_cma_automation()
 
         with col2:
-            if st.button(":material/smartphone: Send Follow-ups", help="Send follow-up sequences to warm leads", use_container_width=True):
+            if st.button("Send Follow-ups", help="Send follow-up sequences to warm leads", use_container_width=True):
                 self._trigger_followup_automation()
 
         with col3:
-            if st.button(":material/call: Book Appointments", help="Auto-book appointments for hot leads", use_container_width=True):
+            if st.button("Book Appointments", help="Auto-book appointments for hot leads", use_container_width=True):
                 self._trigger_appointment_automation()
 
         with col4:
-            if st.button(":material/bar_chart: Performance Report", help="Generate weekly performance report", use_container_width=True):
+            if st.button("Performance Report", help="Generate weekly performance report", use_container_width=True):
                 self._generate_performance_report()
 
     def _render_loading_state(self) -> None:
         """Render loading state with skeleton cards"""
-        st.markdown("### :material/target: Jorge's ROI Command Center")
+        st.markdown("### ROI Command Center")
         st.markdown("*Loading real-time business intelligence...*")
 
         # Create skeleton loading cards
@@ -282,10 +292,10 @@ class HeroMetricsUI:
 
     def _show_hot_leads_detail(self) -> None:
         """Show hot leads detail modal"""
-        st.success(":material/local_fire_department: Hot Leads Detail: Opening detailed view...")
+        st.success("Hot Leads Detail: Opening detailed view...")
 
         # In a real implementation, this would open a detailed view
-        with st.expander(":material/local_fire_department: Hot Leads Details", expanded=True):
+        with st.expander("Hot Leads Details", expanded=True):
             st.markdown("""
             **Top Hot Leads:**
             - Sarah Johnson (Score: 92) - Referral - Est. $18K commission
@@ -298,7 +308,7 @@ class HeroMetricsUI:
 
     def _trigger_cma_automation(self) -> None:
         """Trigger CMA generation automation"""
-        st.success(":material/bar_chart: CMA Automation: Generating CMAs for all Q4 qualified sellers...")
+        st.success("CMA Automation: Generating CMAs for all Q4 qualified sellers...")
 
         # Mock progress bar
         progress_bar = st.progress(0)
@@ -308,23 +318,23 @@ class HeroMetricsUI:
             time.sleep(0.01)  # Simulate processing
             progress_bar.progress(i + 1)
 
-        st.success(":material/check_circle: Generated 3 CMAs successfully! Total estimated commission: $67K")
+        st.success("Generated 3 CMAs successfully! Total estimated commission: $67K")
 
     def _trigger_followup_automation(self) -> None:
         """Trigger follow-up automation"""
-        st.success(":material/smartphone: Follow-up Automation: Sending sequences to warm leads...")
-        st.info(":material/check_circle: Sent follow-up messages to 12 warm leads")
+        st.success("Follow-up Automation: Sending sequences to warm leads...")
+        st.info("Sent follow-up messages to 12 warm leads")
 
     def _trigger_appointment_automation(self) -> None:
         """Trigger appointment booking automation"""
-        st.success(":material/call: Appointment Automation: Booking appointments for hot leads...")
-        st.info(":material/check_circle: Sent appointment booking links to 5 hot leads")
+        st.success("Appointment Automation: Booking appointments for hot leads...")
+        st.info("Sent appointment booking links to 5 hot leads")
 
     def _generate_performance_report(self) -> None:
         """Generate performance report"""
-        st.success(":material/bar_chart: Performance Report: Generating weekly summary...")
+        st.success("Performance Report: Generating weekly summary...")
 
-        with st.expander(":material/bar_chart: Weekly Performance Report", expanded=True):
+        with st.expander("Weekly Performance Report", expanded=True):
             st.markdown("""
             **Week of January 20-26, 2026**
 
@@ -341,7 +351,7 @@ class HeroMetricsUI:
             **30-Day Forecast:**
             - Projected Revenue: $89K
             - Confidence Range: $75K - $103K
-            - Trend: :material/trending_up: Strong pipeline
+            - Trend: Strong pipeline
 
             **Recommendations:**
             1. Focus on referral lead generation
@@ -351,9 +361,9 @@ class HeroMetricsUI:
 
     def _show_forecast_detail(self) -> None:
         """Show forecast detail modal"""
-        st.success(":material/trending_up: Revenue Forecast: Opening detailed analysis...")
+        st.success("Revenue Forecast: Opening detailed analysis...")
 
-        with st.expander(":material/trending_up: 30-Day Revenue Forecast", expanded=True):
+        with st.expander("30-Day Revenue Forecast", expanded=True):
             st.markdown("""
             **Forecast Analysis:**
             - Projected Revenue: $89K

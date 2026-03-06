@@ -32,6 +32,7 @@ from bots.shared.cache_service import get_cache_service
 from bots.shared.calendar_booking_service import FALLBACK_MESSAGE, CalendarBookingService
 from bots.shared.claude_client import ClaudeClient, TaskComplexity
 from bots.shared.ghl_client import GHLClient
+from bots.shared.ghl_oauth_token_store import get_ghl_oauth_token_store
 from bots.shared.logger import get_logger
 from database.repository import fetch_conversation, upsert_contact, upsert_conversation
 
@@ -255,6 +256,19 @@ class JorgeSellerBot:
         # Note: No in-memory _states dict - all state now in Redis
         self.logger.info("Initialized JorgeSellerBot with Redis persistence")
 
+    async def _get_ghl_client_for_location(self, location_id: str) -> GHLClient:
+        """Resolve tenant-scoped GHL client for location with fallback to default client."""
+        location = (location_id or "").strip()
+        if not location:
+            return self.ghl_client
+        try:
+            token_store = get_ghl_oauth_token_store()
+            resolved = await token_store.build_client(location, fallback_client=self.ghl_client)
+            return resolved or self.ghl_client
+        except Exception as exc:
+            self.logger.warning(f"Failed tenant GHL client lookup for location {location}: {exc}")
+            return self.ghl_client
+
     async def get_conversation_state(
         self,
         contact_id: str
@@ -470,6 +484,7 @@ class JorgeSellerBot:
         """
         try:
             self.logger.info(f"Processing seller message for contact {contact_id}")
+            ghl_client = await self._get_ghl_client_for_location(location_id)
 
             # --- Jorge-Active takeover check ---
             # If Jorge adds the "Jorge-Active" tag to a contact, the bot goes silent
@@ -480,7 +495,7 @@ class JorgeSellerBot:
             else:
                 _tags = []
                 try:
-                    _contact_data = await self.ghl_client.get_contact(contact_id)
+                    _contact_data = await ghl_client.get_contact(contact_id)
                     _payload = _contact_data.get("data", _contact_data) if isinstance(_contact_data, dict) else {}
                     _contact = _payload.get("contact", _payload) if isinstance(_payload, dict) else {}
                     _tags = _contact.get("tags") or []
@@ -508,7 +523,7 @@ class JorgeSellerBot:
                 slot_index = self.calendar_service.detect_slot_selection(message, contact_id)
                 if slot_index is not None:
                     booking = await self.calendar_service.book_appointment(
-                        contact_id, slot_index, "seller"
+                        contact_id, slot_index, "seller", ghl_client=ghl_client
                     )
                     if booking["success"]:
                         state.appointment_booked = True
@@ -607,7 +622,7 @@ class JorgeSellerBot:
             if _offer_scheduling:
                 if temperature == SellerStatus.HOT.value:
                     sched = await self.calendar_service.offer_appointment_slots(
-                        contact_id, "seller"
+                        contact_id, "seller", ghl_client=ghl_client
                     )
                 else:
                     sched = {"message": FALLBACK_MESSAGE}
@@ -1181,6 +1196,8 @@ RESPONSE (keep under 100 words):"""
         BackgroundTasks so GHL workflows fire *after* the SMS is delivered.
         """
 
+        ghl_client = await self._get_ghl_client_for_location(location_id)
+
         for action in actions:
             try:
                 action_type = action.get("type")
@@ -1190,7 +1207,7 @@ RESPONSE (keep under 100 words):"""
                     continue
 
                 elif action_type == "update_custom_field":
-                    await self.ghl_client.update_custom_field(
+                    await ghl_client.update_custom_field(
                         contact_id, action["field"], action["value"]
                     )
 
@@ -1199,7 +1216,7 @@ RESPONSE (keep under 100 words):"""
                         f"Triggering workflow: {action.get('workflow_name', 'Unknown')} "
                         f"for contact {contact_id}"
                     )
-                    await self.ghl_client.trigger_workflow(contact_id, action["workflow_id"])
+                    await ghl_client.trigger_workflow(contact_id, action["workflow_id"])
 
             except Exception as e:
                 self.logger.error(f"Failed to apply action {action_type}: {e}")

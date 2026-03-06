@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from bots.shared.bot_settings import get_override as _get_bot_override
 from bots.shared.config import settings
+from bots.shared.ghl_oauth_token_store import get_ghl_oauth_token_store
 from bots.shared.logger import get_logger
 from bots.shared.response_filter import sanitize_bot_response
 
@@ -43,17 +44,37 @@ async def _deferred_tag_apply(
     contact_id: str,
     actions: List[Dict[str, Any]],
     delay_seconds: int = 30,
+    location_id: Optional[str] = None,
 ) -> None:
     """Apply add/remove tag actions after a delay so GHL workflows fire after SMS is delivered."""
     await asyncio.sleep(delay_seconds)
+    scoped_client = ghl_client
+    if location_id:
+        scoped_client = await _resolve_ghl_client_for_location(location_id, fallback_client=ghl_client)
+    if not scoped_client:
+        logger.warning(f"Deferred tag actions skipped: no GHL client for contact={contact_id}")
+        return
     for action in actions:
         try:
             if action.get("type") == "add_tag":
-                await ghl_client.add_tag(contact_id, action["tag"])
+                await scoped_client.add_tag(contact_id, action["tag"])
             elif action.get("type") == "remove_tag":
-                await ghl_client.remove_tag(contact_id, action["tag"])
+                await scoped_client.remove_tag(contact_id, action["tag"])
         except Exception as e:
             logger.error(f"Deferred tag action failed for {contact_id}: {e}")
+
+
+async def _resolve_ghl_client_for_location(location_id: Optional[str], fallback_client: Any) -> Any:
+    """Prefer OAuth-scoped GHL client for location, fallback to process default client."""
+    location = (location_id or "").strip()
+    if not location:
+        return fallback_client
+    try:
+        token_store = get_ghl_oauth_token_store()
+        return await token_store.build_client(location, fallback_client=fallback_client)
+    except Exception as exc:
+        logger.warning(f"Failed to resolve OAuth GHL client for location {location}: {exc}")
+        return fallback_client
 
 
 def _get_state():
@@ -154,6 +175,7 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
             or payload.get("location_id")
             or settings.ghl_location_id
         )
+        ghl_client = await _resolve_ghl_client_for_location(location_id, fallback_client=state._ghl_client)
         message_body = payload.get("body") or payload.get("message") or ""
 
         if not contact_id:
@@ -214,9 +236,9 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
             # Track whether the payload explicitly specifies a bot (vs. GHL API fallback)
             _bot_type_explicit = bool(bot_type)
 
-            if not bot_type and state._ghl_client:
+            if not bot_type and ghl_client:
                 try:
-                    contact_resp = await state._ghl_client.get_contact(contact_id)
+                    contact_resp = await ghl_client.get_contact(contact_id)
                     payload = contact_resp.get("data", contact_resp) if isinstance(contact_resp, dict) else {}
                     contact_obj = payload.get("contact", payload) if isinstance(payload, dict) else {}
                     custom_fields = contact_obj.get("customFields", [])
@@ -302,9 +324,13 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
                     a for a in result.actions_taken
                     if a.get("type") in ("add_tag", "remove_tag")
                 ]
-                if _tag_actions and state._ghl_client:
+                if _tag_actions and ghl_client:
                     background_tasks.add_task(
-                        _deferred_tag_apply, state._ghl_client, contact_id, _tag_actions
+                        _deferred_tag_apply,
+                        ghl_client,
+                        contact_id,
+                        _tag_actions,
+                        location_id=location_id,
                     )
 
             elif "buyer" in bot_type_lower:
@@ -330,13 +356,22 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
                     a for a in result.actions_taken
                     if a.get("type") in ("add_tag", "remove_tag")
                 ]
-                if _tag_actions and state._ghl_client:
+                if _tag_actions and ghl_client:
                     background_tasks.add_task(
-                        _deferred_tag_apply, state._ghl_client, contact_id, _tag_actions
+                        _deferred_tag_apply,
+                        ghl_client,
+                        contact_id,
+                        _tag_actions,
+                        location_id=location_id,
                     )
 
             else:
-                lead_data = {"id": contact_id, "message": message_body, **contact_info}
+                lead_data = {
+                    "id": contact_id,
+                    "location_id": location_id,
+                    "message": message_body,
+                    **contact_info,
+                }
                 analysis, metrics = await state.lead_analyzer.analyze_lead(lead_data)
                 result_meta.update(
                     {
@@ -349,9 +384,9 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
 
             # Send reply via GHL SMS (seller / buyer bots)
             response_message = sanitize_bot_response(response_message)
-            if response_message and state._ghl_client:
+            if response_message and ghl_client:
                 try:
-                    await state._ghl_client.send_message(contact_id, response_message, "SMS")
+                    await ghl_client.send_message(contact_id, response_message, "SMS")
                     logger.info(f"Reply sent to {contact_id} via GHL SMS")
                 except Exception as e:
                     logger.error(f"Failed to send GHL reply to {contact_id}: {e}")

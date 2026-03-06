@@ -48,7 +48,7 @@ class ThemeManager:
         with col2:
             # Theme toggle button
             current_theme = st.session_state.theme_mode
-            icon = ":material/dark_mode:" if current_theme == "light" else ":material/light_mode:"
+            icon = "" if current_theme == "light" else ""
             next_theme = "dark" if current_theme == "light" else "light"
 
             if st.button(f"{icon}", help=f"Switch to {next_theme} mode"):
@@ -56,12 +56,12 @@ class ThemeManager:
 
         with col3:
             # Theme settings dropdown
-            with st.popover(":material/settings:", help="Theme settings"):
+            with st.popover("", help="Theme settings"):
                 self.render_theme_settings()
 
     def render_theme_settings(self):
         """Render advanced theme settings"""
-        st.subheader(":material/palette: Theme Settings")
+        st.subheader("Theme Settings")
 
         # Theme mode selection
         theme_options = ["light", "dark", "auto"]
@@ -80,7 +80,7 @@ class ThemeManager:
         st.divider()
 
         # Accessibility preferences
-        st.subheader(":material/accessibility: Accessibility")
+        st.subheader("Accessibility")
 
         high_contrast = st.checkbox(
             "High Contrast",
