@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     ghl_webhook_secret: Optional[str] = None
     ghl_webhook_public_key: Optional[str] = None
+    ghl_oauth_client_id: Optional[str] = None
+    ghl_oauth_client_secret: Optional[str] = None
+    ghl_oauth_redirect_uri: Optional[str] = None
+    ghl_oauth_scopes: str = "contacts.readonly contacts.write conversations.readonly conversations.write"
+    ghl_oauth_user_type: str = "Company"  # OAuth2.0 v2: Company | Location
+    ghl_oauth_use_ngrok: bool = True  # Prefer ngrok redirect over localhost during dev
+    ghl_oauth_ngrok_api_url: str = "http://127.0.0.1:4040/api/tunnels"
+    ghl_oauth_auto_create_users: bool = True
+    ghl_oauth_default_role: str = "viewer"
+    ghl_oauth_allow_surrogate_email: bool = True
 
     # API Rate Limiting
     rate_limit_per_minute: int = 60

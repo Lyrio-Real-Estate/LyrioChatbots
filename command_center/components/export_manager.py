@@ -59,7 +59,7 @@ class ExportManager:
         """Render export controls in sidebar or main area"""
         with st.sidebar:
             st.markdown("---")
-            st.subheader("📥 Export Dashboard")
+            st.subheader(":material/download: Export Dashboard")
 
             # Export type selection
             export_type = st.selectbox(
@@ -109,7 +109,7 @@ class ExportManager:
             custom_options = self._render_custom_options(export_type, export_format)
 
             # Export button
-            if st.button("📤 Generate Export", type="primary"):
+            if st.button(":material/upload: Generate Export", type="primary"):
                 with st.spinner("Generating export..."):
                     self._handle_export(
                         export_type=export_type,
@@ -126,11 +126,11 @@ class ExportManager:
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📊 CSV Data"):
+                if st.button(":material/bar_chart: CSV Data"):
                     self._quick_export_csv(data, include_filters)
 
             with col2:
-                if st.button("🖼️ PNG Charts"):
+                if st.button(":material/image: PNG Charts"):
                     self._quick_export_charts("PNG")
 
     def _render_custom_options(self, export_type: str, export_format: str) -> Dict[str, Any]:
@@ -223,11 +223,11 @@ class ExportManager:
             elif export_type == "Activity Feed":
                 self._export_activity_feed(format, date_from, date_to, include_filters, options)
 
-            st.success(f"✅ Export completed: {export_type} ({format})")
+            st.success(f":material/check_circle: Export completed: {export_type} ({format})")
 
         except Exception as e:
             logger.error(f"Export failed: {e}")
-            st.error(f"❌ Export failed: {str(e)}")
+            st.error(f":material/cancel: Export failed: {str(e)}")
 
     def _export_dashboard_data(self, format: str, date_from, date_to,
                               include_filters: bool, options: Dict, data: Optional[Dict]):
@@ -254,7 +254,7 @@ class ExportManager:
             filename = f"jorge_dashboard_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
             st.download_button(
-                "📥 Download CSV",
+                ":material/download: Download CSV",
                 csv_data,
                 filename,
                 "text/csv",
@@ -287,7 +287,7 @@ class ExportManager:
         filename = f"jorge_dashboard_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         st.download_button(
-            "📥 Download Excel",
+            ":material/download: Download Excel",
             excel_data,
             filename,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -314,7 +314,7 @@ class ExportManager:
         filename = f"jorge_dashboard_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         st.download_button(
-            "📥 Download JSON",
+            ":material/download: Download JSON",
             json_string,
             filename,
             "application/json",
@@ -355,7 +355,7 @@ class ExportManager:
             filename = f"jorge_chart_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
 
             st.download_button(
-                f"📥 Download Chart {i+1} (PNG)",
+                f":material/download: Download Chart {i+1} (PNG)",
                 img_bytes,
                 filename,
                 "image/png",
@@ -457,7 +457,7 @@ class ExportManager:
         filename = f"jorge_dashboard_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
         st.download_button(
-            "📥 Download PDF Report",
+            ":material/download: Download PDF Report",
             pdf_data,
             filename,
             "application/pdf",
@@ -479,7 +479,7 @@ class ExportManager:
         filename = f"jorge_quick_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
         st.download_button(
-            "📥 Download Quick CSV",
+            ":material/download: Download Quick CSV",
             csv_data,
             filename,
             "text/csv",

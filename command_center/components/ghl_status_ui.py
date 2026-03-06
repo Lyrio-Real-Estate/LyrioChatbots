@@ -93,12 +93,12 @@ class GHLStatusUI:
 
         with col1:
             st.markdown("""
-            <h2 style='margin-bottom: 0;'>🔗 GHL Integration Command Center</h2>
+            <h2 style='margin-bottom: 0;'>:material/link: GHL Integration Command Center</h2>
             <p style='color: #6b7280; margin-top: 0;'>Real-time monitoring and automation control</p>
             """, unsafe_allow_html=True)
 
         with col2:
-            if st.button("🔄", help="Refresh status", key="refresh_ghl_status"):
+            if st.button(":material/refresh:", help="Refresh status", key="refresh_ghl_status"):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -136,12 +136,12 @@ class GHLStatusUI:
         if not status_data.alerts:
             return
 
-        st.markdown("### 🚨 Active Alerts")
+        st.markdown("### :material/error: Active Alerts")
 
         # Group alerts by severity
-        critical_alerts = [alert for alert in status_data.alerts if "🚨" in alert or "❌" in alert]
-        warning_alerts = [alert for alert in status_data.alerts if "⚠️" in alert]
-        info_alerts = [alert for alert in status_data.alerts if "⏸️" in alert]
+        critical_alerts = [alert for alert in status_data.alerts if ":material/error:" in alert or ":material/cancel:" in alert]
+        warning_alerts = [alert for alert in status_data.alerts if ":material/warning:" in alert]
+        info_alerts = [alert for alert in status_data.alerts if ":material/pause_circle:" in alert]
 
         # Critical alerts
         if critical_alerts:
@@ -176,11 +176,11 @@ class GHLStatusUI:
             }.get(status_data.connection.status, "#6B7280")
 
             status_icon = {
-                ConnectionStatus.CONNECTED: "🟢",
-                ConnectionStatus.DEGRADED: "🟡",
-                ConnectionStatus.RATE_LIMITED: "🟡",
-                ConnectionStatus.DISCONNECTED: "🔴"
-            }.get(status_data.connection.status, "⚪")
+                ConnectionStatus.CONNECTED: ":material/check_circle:",
+                ConnectionStatus.DEGRADED: "Warm",
+                ConnectionStatus.RATE_LIMITED: "Warm",
+                ConnectionStatus.DISCONNECTED: ":material/cancel:"
+            }.get(status_data.connection.status, ":material/radio_button_unchecked:")
 
             st.markdown(f"""
             <div style="background: white; padding: 20px; border-radius: 10px;
@@ -288,32 +288,32 @@ class GHLStatusUI:
     def _render_automation_controls(self, status_data: GHLIntegrationData) -> None:
         """Render automation control panel"""
 
-        st.markdown("### 🤖 Automation Control Panel")
+        st.markdown("### :material/smart_toy: Automation Control Panel")
 
         # Quick action buttons
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            if st.button("🚀 Start All", help="Start all paused automations", use_container_width=True):
+            if st.button(":material/rocket_launch: Start All", help="Start all paused automations", use_container_width=True):
                 self._start_all_automations(status_data)
 
         with col2:
-            if st.button("⏸️ Pause All", help="Pause all running automations", use_container_width=True):
+            if st.button(":material/pause_circle: Pause All", help="Pause all running automations", use_container_width=True):
                 self._pause_all_automations(status_data)
 
         with col3:
-            if st.button("🔄 Restart Failed", help="Restart failed automations", use_container_width=True):
+            if st.button(":material/refresh: Restart Failed", help="Restart failed automations", use_container_width=True):
                 self._restart_failed_automations(status_data)
 
         with col4:
-            if st.button("📊 Performance Report", help="Generate automation report", use_container_width=True):
+            if st.button(":material/bar_chart: Performance Report", help="Generate automation report", use_container_width=True):
                 self._show_automation_report(status_data)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Individual automation controls
         for automation in status_data.automations:
-            with st.expander(f"🔧 {automation.name} - {automation.status.value.title()}",
+            with st.expander(f":material/build: {automation.name} - {automation.status.value.title()}",
                            expanded=(automation.status != AutomationStatus.ACTIVE)):
 
                 col1, col2, col3 = st.columns([2, 1, 1])
@@ -345,17 +345,17 @@ class GHLStatusUI:
 
                 with col3:
                     if automation.status == AutomationStatus.PAUSED:
-                        if st.button("▶️ Start", key=f"start_{automation.name}"):
+                        if st.button(":material/play_arrow: Start", key=f"start_{automation.name}"):
                             self._start_automation(automation.name)
                     elif automation.status == AutomationStatus.ACTIVE:
-                        if st.button("⏸️ Pause", key=f"pause_{automation.name}"):
+                        if st.button(":material/pause_circle: Pause", key=f"pause_{automation.name}"):
                             self._pause_automation(automation.name)
                     elif automation.status == AutomationStatus.ERROR:
-                        if st.button("🔄 Restart", key=f"restart_{automation.name}"):
+                        if st.button(":material/refresh: Restart", key=f"restart_{automation.name}"):
                             self._restart_automation(automation.name)
 
         # Automation performance chart
-        st.markdown("### 📈 Automation Performance")
+        st.markdown("### :material/trending_up: Automation Performance")
         status_component = run_async(self._get_status_component())
         performance_chart = status_component.create_automation_performance_chart(status_data)
         st.plotly_chart(performance_chart, use_container_width=True)
@@ -363,13 +363,13 @@ class GHLStatusUI:
     def _render_performance_metrics(self, status_data: GHLIntegrationData) -> None:
         """Render detailed performance metrics"""
 
-        st.markdown("### 📊 Performance Metrics")
+        st.markdown("### :material/bar_chart: Performance Metrics")
 
         # Webhook metrics
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("#### 📡 Webhook Performance")
+            st.markdown("#### :material/rss_feed: Webhook Performance")
 
             webhook_success_rate = (status_data.webhooks.successful_processed /
                                   max(status_data.webhooks.total_received, 1)) * 100
@@ -388,7 +388,7 @@ class GHLStatusUI:
                 st.metric(metric, value)
 
         with col2:
-            st.markdown("#### 🎯 Daily Performance Summary")
+            st.markdown("#### :material/target: Daily Performance Summary")
 
             if status_data.daily_stats:
                 daily_metrics = {
@@ -406,7 +406,7 @@ class GHLStatusUI:
 
     def _render_loading_state(self) -> None:
         """Render loading state"""
-        st.markdown("### 🔗 GHL Integration Command Center")
+        st.markdown("### :material/link: GHL Integration Command Center")
         st.markdown("*Loading integration status...*")
 
         with st.spinner("Connecting to GHL..."):
@@ -436,7 +436,7 @@ class GHLStatusUI:
             st.error(f"Failed to start automations for: {', '.join(failed)}")
             return
 
-        st.success("🚀 All automations set to active")
+        st.success(":material/rocket_launch: All automations set to active")
         self._refresh_after_control_change()
 
     def _pause_all_automations(self, status_data: GHLIntegrationData) -> None:
@@ -462,7 +462,7 @@ class GHLStatusUI:
             st.error(f"Failed to pause automations for: {', '.join(failed)}")
             return
 
-        st.warning("⏸️ All automations paused")
+        st.warning(":material/pause_circle: All automations paused")
         self._refresh_after_control_change()
 
     def _restart_failed_automations(self, status_data: GHLIntegrationData) -> None:
@@ -489,7 +489,7 @@ class GHLStatusUI:
             st.error(f"Failed to restart automations for: {', '.join(restart_failures)}")
             return
 
-        st.success(f"🔄 Restarted failed automations: {len(failed_bots)}")
+        st.success(f":material/refresh: Restarted failed automations: {len(failed_bots)}")
         self._refresh_after_control_change()
 
     def _start_automation(self, automation_name: str) -> None:
@@ -503,7 +503,7 @@ class GHLStatusUI:
             if err:
                 st.error(err)
             return
-        st.success(f"▶️ Started {automation_name}")
+        st.success(f":material/play_arrow: Started {automation_name}")
         self._refresh_after_control_change()
 
     def _pause_automation(self, automation_name: str) -> None:
@@ -517,7 +517,7 @@ class GHLStatusUI:
             if err:
                 st.error(err)
             return
-        st.warning(f"⏸️ Paused {automation_name}")
+        st.warning(f":material/pause_circle: Paused {automation_name}")
         self._refresh_after_control_change()
 
     def _restart_automation(self, automation_name: str) -> None:
@@ -531,14 +531,14 @@ class GHLStatusUI:
             if err:
                 st.error(err)
             return
-        st.success(f"🔄 Restarted {automation_name}")
+        st.success(f":material/refresh: Restarted {automation_name}")
         self._refresh_after_control_change()
 
     def _show_automation_report(self, status_data: GHLIntegrationData) -> None:
         """Show automation performance report"""
-        st.success("📊 Generating automation performance report...")
+        st.success(":material/bar_chart: Generating automation performance report...")
 
-        with st.expander("📊 Automation Performance Report", expanded=True):
+        with st.expander(":material/bar_chart: Automation Performance Report", expanded=True):
             st.markdown(f"""
             **Report Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 

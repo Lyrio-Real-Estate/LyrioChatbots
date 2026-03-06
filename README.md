@@ -122,6 +122,21 @@ uvicorn bots.buyer_bot.main:app --port 8003
 streamlit run command_center/dashboard_v3.py
 ```
 
+### OAuth v2 Dev (ngrok)
+
+If GoHighLevel OAuth shows `redirect_uri does not match client value`, run dashboard through ngrok:
+
+```bash
+python scripts/start_dashboard_with_ngrok.py
+```
+
+This script:
+- starts/reuses an ngrok HTTPS tunnel for port `8501`
+- sets `GHL_OAUTH_REDIRECT_URI` to that HTTPS URL
+- starts Streamlit with ngrok-aware OAuth env vars
+
+Then add the exact printed URL as an allowed redirect URI in your GoHighLevel OAuth app.
+
 ## Bot Capabilities
 
 **Lead Bot** -- Semantic lead analysis powered by Claude AI. Enforces the 5-minute response rule. Scores leads 0-100 with hot/warm/cold classification, triggers automated nurture sequences, and updates GoHighLevel CRM in real time.

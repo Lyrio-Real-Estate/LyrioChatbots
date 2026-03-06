@@ -194,6 +194,23 @@ class AuthService:
             logger.exception(f"Error creating user: {e}")
             raise
 
+    async def create_tokens_for_user(self, user: User) -> Optional[AuthToken]:
+        """Create access/refresh tokens for an already identified active user."""
+        try:
+            if not user or not user.is_active:
+                return None
+
+            user.last_login = _utcnow_naive()
+            await self._store_user(user)
+
+            tokens = await self._generate_tokens(user)
+            refresh_expires = _utcnow_naive() + timedelta(days=self.refresh_token_expire_days)
+            await self._store_session(user.user_id, tokens.refresh_token, refresh_expires)
+            return tokens
+        except Exception as e:
+            logger.exception(f"Error creating tokens for user {getattr(user, 'email', 'unknown')}: {e}")
+            return None
+
     async def authenticate(self, email: str, password: str) -> Optional[AuthToken]:
         """
         Authenticate user and return JWT tokens.
