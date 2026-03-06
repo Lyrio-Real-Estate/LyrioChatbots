@@ -296,17 +296,32 @@ class GHLIntegrationStatusComponent:
         if os.getenv("PYTEST_CURRENT_TEST"):
             return health
 
-        api_key = os.getenv("GHL_API_KEY", "")
-        if not api_key:
+        api_key = ""
+        # Prefer tenant-scoped OAuth token for the active location.
+        if location_id:
             try:
-                from bots.shared.config import settings
+                from bots.shared.ghl_oauth_token_store import get_ghl_oauth_token_store
 
-                api_key = settings.ghl_api_key or ""
+                token_store = get_ghl_oauth_token_store()
+                oauth_access_token = await token_store.get_access_token(location_id)
+                if isinstance(oauth_access_token, str) and oauth_access_token.strip():
+                    api_key = oauth_access_token.strip()
             except Exception:
                 api_key = ""
 
+        # Fallback for legacy single-tenant API key setups.
+        if not api_key:
+            api_key = os.getenv("GHL_API_KEY", "")
+            if not api_key:
+                try:
+                    from bots.shared.config import settings
+
+                    api_key = settings.ghl_api_key or ""
+                except Exception:
+                    api_key = ""
+
         if not api_key or not location_id:
-            health["error"] = "Missing GHL_API_KEY or location_id"
+            health["error"] = "Missing GHL credentials or location_id"
             return health
 
         try:
