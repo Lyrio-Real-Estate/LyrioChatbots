@@ -82,7 +82,7 @@ def render_active_conversations(
 
         with col1:
             if page > 1:
-                if st.button("← Previous"):
+                if st.button(":material/chevron_left: Previous"):
                     st.session_state.page = page - 1
                     st.rerun()
 
@@ -91,7 +91,7 @@ def render_active_conversations(
 
         with col3:
             if page < total_pages:
-                if st.button("Next →"):
+                if st.button("Next :material/chevron_right:"):
                     st.session_state.page = page + 1
                     st.rerun()
 
@@ -99,8 +99,8 @@ def render_active_conversations(
 def _format_temperature(temp: Temperature) -> str:
     """Format temperature with emoji."""
     emoji_map = {
-        Temperature.HOT: "🔥",
-        Temperature.WARM: "⚡",
-        Temperature.COLD: "❄️"
+        Temperature.HOT: ":material/local_fire_department:",
+        Temperature.WARM: ":material/bolt:",
+        Temperature.COLD: ":material/ac_unit:"
     }
     return f"{emoji_map.get(temp, '')} {temp.value.upper()}"

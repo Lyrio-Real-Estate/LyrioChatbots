@@ -447,31 +447,31 @@ def render_mobile_navigation(
     nav_items = [
         {
             'id': 'overview',
-            'icon': '🏠',
+            'icon': ':material/home:',
             'label': 'Overview',
             'alt_text': 'Business Overview Dashboard'
         },
         {
             'id': 'analytics',
-            'icon': '📈',
+            'icon': ':material/trending_up:',
             'label': 'Analytics',
             'alt_text': 'Performance Analytics'
         },
         {
             'id': 'quick-add',
-            'icon': '➕',
+            'icon': ':material/add_circle:',
             'label': 'Quick Add',
             'alt_text': 'Quick Add Lead or Property'
         },
         {
             'id': 'chats',
-            'icon': '🗣️',
+            'icon': ':material/forum:',
             'label': 'Chats',
             'alt_text': 'Active Conversations'
         },
         {
             'id': 'profile',
-            'icon': '👤',
+            'icon': ':material/person:',
             'label': 'Profile',
             'alt_text': 'User Profile and Settings'
         }
@@ -577,7 +577,7 @@ def update_navigation_badges(notification_counts: Dict[str, int]) -> None:
 # Example usage and demo function
 def demo_mobile_navigation():
     """Demo function showing mobile navigation usage."""
-    st.header("📱 Mobile Navigation Demo")
+    st.header(":material/smartphone: Mobile Navigation Demo")
     
     # Demo configuration
     current_tab = st.selectbox(
@@ -619,7 +619,7 @@ def demo_mobile_navigation():
     
     # Instructions
     st.markdown("""
-    ### 📱 Mobile Navigation Features
+    ### :material/smartphone: Mobile Navigation Features
     
     **Touch Interactions:**
     - Tap navigation items to switch tabs

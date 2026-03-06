@@ -3,12 +3,16 @@ Authentication component for Streamlit dashboard.
 
 Provides login/logout functionality and session management.
 """
+import os
 import secrets
-from typing import Optional
+from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
+import httpx
 import streamlit as st
 
 from bots.shared.auth_service import User, UserRole, get_auth_service
+from bots.shared.config import settings
 from bots.shared.logger import get_logger
 from command_center.async_runtime import run_async
 
@@ -18,6 +22,151 @@ _AUTH_QUERY_PARAM = "sid"
 _AUTH_SESSION_ID_KEY = "auth_session_id"
 _AUTH_SESSION_CACHE_PREFIX = "auth:streamlit:session"
 _AUTH_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
+
+_GHL_OAUTH_STATE_KEY = "ghl_oauth_state"
+_GHL_OAUTH_AUTHORIZE_URL = os.getenv("GHL_OAUTH_AUTHORIZE_URL", "https://marketplace.leadconnectorhq.com/oauth/chooselocation")
+_GHL_OAUTH_TOKEN_URL = os.getenv("GHL_OAUTH_TOKEN_URL", "https://services.leadconnectorhq.com/oauth/token")
+_GHL_OAUTH_USERINFO_URLS = [
+    os.getenv("GHL_OAUTH_USERINFO_URL", "https://services.leadconnectorhq.com/oauth/userinfo"),
+    "https://services.leadconnectorhq.com/users/me",
+]
+
+
+def _ghl_oauth_enabled() -> bool:
+    return bool(
+        settings.ghl_oauth_client_id
+        and settings.ghl_oauth_client_secret
+        and settings.ghl_oauth_redirect_uri
+    )
+
+
+def _build_ghl_oauth_authorize_url() -> str:
+    state = secrets.token_urlsafe(24)
+    st.session_state[_GHL_OAUTH_STATE_KEY] = state
+    params = {
+        "response_type": "code",
+        "client_id": settings.ghl_oauth_client_id,
+        "redirect_uri": settings.ghl_oauth_redirect_uri,
+        "scope": settings.ghl_oauth_scopes,
+        "state": state,
+    }
+    return f"{_GHL_OAUTH_AUTHORIZE_URL}?{urlencode(params)}"
+
+
+async def _exchange_ghl_oauth_code(code: str) -> Optional[Dict[str, Any]]:
+    data = {
+        "grant_type": "authorization_code",
+        "client_id": settings.ghl_oauth_client_id,
+        "client_secret": settings.ghl_oauth_client_secret,
+        "redirect_uri": settings.ghl_oauth_redirect_uri,
+        "code": code,
+    }
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(_GHL_OAUTH_TOKEN_URL, data=data)
+        response.raise_for_status()
+        return response.json()
+
+
+async def _fetch_ghl_user_identity(access_token: str) -> Optional[Dict[str, Any]]:
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Version": "2021-07-28",
+        "Accept": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for endpoint in _GHL_OAUTH_USERINFO_URLS:
+            try:
+                response = await client.get(endpoint, headers=headers)
+                if response.status_code >= 400:
+                    continue
+                payload = response.json()
+                if isinstance(payload, dict):
+                    return payload
+            except Exception:
+                continue
+    return None
+
+
+def _extract_email(payload: Any) -> Optional[str]:
+    if isinstance(payload, dict):
+        for key in ("email", "userEmail", "primaryEmail"):
+            value = payload.get(key)
+            if isinstance(value, str) and "@" in value:
+                return value.lower().strip()
+        for value in payload.values():
+            found = _extract_email(value)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _extract_email(item)
+            if found:
+                return found
+    return None
+
+
+def _consume_ghl_oauth_callback() -> Optional[User]:
+    code = _read_query_param("code")
+    if not code:
+        return None
+
+    error = _read_query_param("error")
+    if error:
+        st.error(f"GoHighLevel OAuth error: {error}")
+        _write_query_param("code", None)
+        _write_query_param("error", None)
+        _write_query_param("state", None)
+        return None
+
+    expected_state = st.session_state.get(_GHL_OAUTH_STATE_KEY)
+    callback_state = _read_query_param("state")
+    if expected_state and callback_state != expected_state:
+        st.error("Invalid OAuth state. Please try GoHighLevel login again.")
+        _write_query_param("code", None)
+        _write_query_param("state", None)
+        return None
+
+    try:
+        auth_service = get_auth_service()
+        token_payload = run_async(_exchange_ghl_oauth_code(code))
+        if not token_payload:
+            st.error("Unable to complete GoHighLevel OAuth token exchange.")
+            return None
+
+        ghl_access_token = token_payload.get("access_token")
+        if not ghl_access_token:
+            st.error("OAuth completed but access token was missing from GoHighLevel response.")
+            return None
+
+        identity = run_async(_fetch_ghl_user_identity(ghl_access_token))
+        email = _extract_email(identity)
+        if not email:
+            st.error("Unable to determine your email from GoHighLevel OAuth profile.")
+            return None
+
+        user = run_async(auth_service.get_user_by_email(email))
+        if not user or not user.is_active:
+            st.error("No active dashboard account found for this GoHighLevel user.")
+            return None
+
+        tokens = run_async(auth_service.create_tokens_for_user(user))
+        if not tokens:
+            st.error("Failed to create dashboard session after OAuth login.")
+            return None
+
+        _set_authenticated_state(user, tokens.access_token, tokens.refresh_token)
+        st.success(f"Welcome, {user.name}!")
+        _write_query_param("code", None)
+        _write_query_param("state", None)
+        _write_query_param("error", None)
+        st.rerun()
+        return user
+    except Exception as e:
+        logger.exception(f"GHL OAuth callback error: {e}")
+        st.error("GoHighLevel OAuth login failed. Please try again.")
+        return None
 
 
 def _auth_session_cache_key(session_id: str) -> str:
@@ -163,13 +312,23 @@ def render_login_form() -> Optional[User]:
     Returns:
         Authenticated user if login successful, None otherwise
     """
+    oauth_user = _consume_ghl_oauth_callback()
+    if oauth_user:
+        return oauth_user
+
     st.markdown("""
     <div style="max-width: 400px; margin: 0 auto; padding: 2rem; 
                 background: white; border-radius: 10px; 
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
     """, unsafe_allow_html=True)
     
-    st.markdown("### 🏠 Jorge's Real Estate AI")
+
+    if _ghl_oauth_enabled():
+        authorize_url = _build_ghl_oauth_authorize_url()
+        st.markdown(f"[Login with GoHighLevel]({authorize_url})")
+        st.caption("OAuth login requires a matching dashboard user email.")
+        st.markdown("---")
+    st.markdown("### :material/home: Jorge's Real Estate AI")
     st.markdown("**Dashboard Login**")
     
     with st.form("login_form"):
@@ -312,16 +471,16 @@ def render_user_menu(user: User) -> None:
         user: Authenticated user
     """
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 👤 User")
+    st.sidebar.markdown("### :material/person: User")
     
     # User info
     role_emoji = {
-        'admin': '👑',
-        'agent': '🏡', 
-        'viewer': '👁️'
+        'admin': ':material/shield:',
+        'agent': ':material/real_estate_agent:', 
+        'viewer': ':material/visibility:'
     }
     
-    emoji = role_emoji.get(user.role.value, '👤')
+    emoji = role_emoji.get(user.role.value, ':material/person:')
     st.sidebar.markdown(f"**{emoji} {user.name}**")
     st.sidebar.markdown(f"*{user.role.value.title()}*")
     
@@ -366,7 +525,7 @@ def require_permission(user: User, resource: str, action: str) -> bool:
     has_permission = check_permission(user, resource, action)
     
     if not has_permission:
-        st.error(f"🚫 Access Denied: You need {action} permission for {resource}")
+        st.error(f":material/block: Access Denied: You need {action} permission for {resource}")
         st.info("Contact your administrator to request access.")
         return False
     
@@ -382,9 +541,9 @@ def render_role_badge(user: User) -> None:
     }
     
     role_labels = {
-        'admin': '👑 Admin',
-        'agent': '🏡 Agent', 
-        'viewer': '👁️ Viewer'
+        'admin': ':material/shield: Admin',
+        'agent': ':material/real_estate_agent: Agent', 
+        'viewer': ':material/visibility: Viewer'
     }
     
     color = role_colors.get(user.role.value, '#6c757d')
@@ -404,7 +563,7 @@ def render_role_badge(user: User) -> None:
 
 def create_user_management_interface() -> None:
     """Create user management interface for admins."""
-    st.markdown("### 👥 User Management")
+    st.markdown("### :material/groups: User Management")
     
     # List existing users
     try:
@@ -417,11 +576,11 @@ def create_user_management_interface() -> None:
                 col1, col2, col3 = st.columns([3, 2, 2])
                 with col1:
                     st.write(f"**{user.name}**")
-                    st.write(f"📧 {user.email}")
+                    st.write(f":material/mail: {user.email}")
                 with col2:
                     render_role_badge(user)
                 with col3:
-                    status = "✅ Active" if user.is_active else "❌ Inactive"
+                    status = ":material/check_circle: Active" if user.is_active else ":material/cancel: Inactive"
                     st.write(status)
                 st.markdown("---")
         
@@ -436,7 +595,7 @@ def create_user_management_interface() -> None:
                 new_role = st.selectbox(
                     "Role", 
                     options=['agent', 'viewer', 'admin'],
-                    format_func=lambda x: {'agent': '🏡 Agent', 'viewer': '👁️ Viewer', 'admin': '👑 Admin'}[x]
+                    format_func=lambda x: {'agent': ':material/real_estate_agent: Agent', 'viewer': ':material/visibility: Viewer', 'admin': ':material/shield: Admin'}[x]
                 )
                 new_password = st.text_input("Password", type="password")
             
