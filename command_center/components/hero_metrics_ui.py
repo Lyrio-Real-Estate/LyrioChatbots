@@ -27,6 +27,21 @@ class HeroMetricsUI:
     def __init__(self):
         self.metrics_component = create_enhanced_hero_metrics()
 
+    @staticmethod
+    def _is_light_mode() -> bool:
+        toggle_state = st.session_state.get("sidebar_theme_toggle")
+        if isinstance(toggle_state, bool):
+            return toggle_state
+
+        theme_value = str(st.session_state.get("ui_theme", "")).strip().lower()
+        if theme_value in {"dark", "light"}:
+            return theme_value == "light"
+
+        query_theme = st.query_params.get("theme")
+        if isinstance(query_theme, list):
+            query_theme = query_theme[0] if query_theme else None
+        return str(query_theme or "").strip().lower() == "light"
+
     def render_hero_metrics_section(self, location_id: str) -> None:
         """
         Render the complete hero metrics section with enhanced UX.
@@ -34,6 +49,44 @@ class HeroMetricsUI:
         Args:
             location_id: GHL location ID for data filtering
         """
+        # Theme-consistent styling for ROI action controls.
+        st.markdown(
+            """
+            <style>
+            .st-key-refresh_hero_metrics button,
+            .st-key-quick_action_generate_cmas button,
+            .st-key-quick_action_send_followups button,
+            .st-key-quick_action_book_appointments button,
+            .st-key-quick_action_performance_report button {
+                background: #0f172a !important;
+                color: #cbd5e1 !important;
+                -webkit-text-fill-color: #cbd5e1 !important;
+                border: 1px solid #243449 !important;
+                border-radius: 10px !important;
+                box-shadow: none !important;
+                opacity: 1 !important;
+            }
+
+            .st-key-refresh_hero_metrics button:hover,
+            .st-key-refresh_hero_metrics button:focus-visible,
+            .st-key-quick_action_generate_cmas button:hover,
+            .st-key-quick_action_generate_cmas button:focus-visible,
+            .st-key-quick_action_send_followups button:hover,
+            .st-key-quick_action_send_followups button:focus-visible,
+            .st-key-quick_action_book_appointments button:hover,
+            .st-key-quick_action_book_appointments button:focus-visible,
+            .st-key-quick_action_performance_report button:hover,
+            .st-key-quick_action_performance_report button:focus-visible {
+                background: #172235 !important;
+                color: #e2e8f0 !important;
+                -webkit-text-fill-color: #e2e8f0 !important;
+                border-color: #324b68 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         # Section header with refresh control
         roi_title = html.escape((os.getenv("DASHBOARD_ROI_TITLE") or "ROI Command Center").strip() or "ROI Command Center")
         roi_subtitle = html.escape(
@@ -41,6 +94,7 @@ class HeroMetricsUI:
             or "Real-time business intelligence for maximum ROI"
         )
         col1, col2 = st.columns([4, 1])
+        action_button_type = "secondary"
 
         with col1:
             st.markdown(
@@ -57,6 +111,7 @@ class HeroMetricsUI:
                 help="Refresh metrics",
                 key="refresh_hero_metrics",
                 use_container_width=True,
+                type=action_button_type,
             ):
                 st.cache_data.clear()
                 st.rerun()
@@ -97,23 +152,23 @@ class HeroMetricsUI:
         st.markdown("""
         <style>
         .metric-card {
-            background: linear-gradient(180deg, #121a28 0%, #0f1724 100%);
+            background: var(--lyrio-metric-card-bg, linear-gradient(180deg, #121a28 0%, #0f1724 100%));
             border-radius: 12px;
             padding: 14px 14px 12px;
-            border: 1px solid #233246;
+            border: 1px solid var(--lyrio-metric-card-border, #233246);
             border-left: 4px solid;
             margin-bottom: 12px;
             min-height: 184px;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 8px 18px rgba(2, 6, 23, 0.3);
+            box-shadow: var(--lyrio-metric-card-shadow, 0 8px 18px rgba(2, 6, 23, 0.3));
             transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
         }
 
         .metric-card:hover {
             transform: translateY(-2px);
-            border-color: #345170;
-            box-shadow: 0 11px 22px rgba(2, 6, 23, 0.4);
+            border-color: var(--lyrio-metric-card-hover-border, #345170);
+            box-shadow: var(--lyrio-metric-card-hover-shadow, 0 11px 22px rgba(2, 6, 23, 0.4));
         }
 
         .metric-value {
@@ -128,14 +183,14 @@ class HeroMetricsUI:
         .metric-label {
             font-size: 0.98rem;
             font-weight: 600;
-            color: #d9e2f0;
+            color: var(--lyrio-metric-label-text, #d9e2f0);
             margin-bottom: 4px;
             letter-spacing: 0.01em;
         }
 
         .metric-delta {
             font-size: 0.93rem;
-            color: #9fb0c8;
+            color: var(--lyrio-metric-delta-text, #9fb0c8);
             font-weight: 500;
             margin-top: auto;
             line-height: 1.35;
@@ -239,6 +294,8 @@ class HeroMetricsUI:
             m for m in metrics_data
             if m.action_button and ("CMA" in m.label or "Hot Leads" in m.label)
         ]
+        # Keep quick action controls on the same dark-styled treatment in both themes.
+        action_button_type = "secondary"
 
         if not automation_metrics:
             return
@@ -249,19 +306,43 @@ class HeroMetricsUI:
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            if st.button("Generate All CMAs", help="Auto-generate CMAs for all Q4 sellers", use_container_width=True):
+            if st.button(
+                "Generate All CMAs",
+                help="Auto-generate CMAs for all Q4 sellers",
+                use_container_width=True,
+                key="quick_action_generate_cmas",
+                type=action_button_type,
+            ):
                 self._trigger_cma_automation()
 
         with col2:
-            if st.button("Send Follow-ups", help="Send follow-up sequences to warm leads", use_container_width=True):
+            if st.button(
+                "Send Follow-ups",
+                help="Send follow-up sequences to warm leads",
+                use_container_width=True,
+                key="quick_action_send_followups",
+                type=action_button_type,
+            ):
                 self._trigger_followup_automation()
 
         with col3:
-            if st.button("Book Appointments", help="Auto-book appointments for hot leads", use_container_width=True):
+            if st.button(
+                "Book Appointments",
+                help="Auto-book appointments for hot leads",
+                use_container_width=True,
+                key="quick_action_book_appointments",
+                type=action_button_type,
+            ):
                 self._trigger_appointment_automation()
 
         with col4:
-            if st.button("Performance Report", help="Generate weekly performance report", use_container_width=True):
+            if st.button(
+                "Performance Report",
+                help="Generate weekly performance report",
+                use_container_width=True,
+                key="quick_action_performance_report",
+                type=action_button_type,
+            ):
                 self._generate_performance_report()
 
     def _render_loading_state(self) -> None:
