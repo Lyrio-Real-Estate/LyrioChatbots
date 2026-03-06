@@ -52,7 +52,12 @@ class HeroMetricsUI:
             )
 
         with col2:
-            if st.button("", help="Refresh metrics", key="refresh_hero_metrics"):
+            if st.button(
+                "Refresh Metrics",
+                help="Refresh metrics",
+                key="refresh_hero_metrics",
+                use_container_width=True,
+            ):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -92,91 +97,98 @@ class HeroMetricsUI:
         st.markdown("""
         <style>
         .metric-card {
-            background: white;
+            background: linear-gradient(180deg, #121a28 0%, #0f1724 100%);
             border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 14px 14px 12px;
+            border: 1px solid #233246;
             border-left: 4px solid;
-            margin-bottom: 16px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-bottom: 12px;
+            min-height: 184px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 18px rgba(2, 6, 23, 0.3);
+            transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
         }
 
         .metric-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            border-color: #345170;
+            box-shadow: 0 11px 22px rgba(2, 6, 23, 0.4);
         }
 
         .metric-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin: 8px 0;
-            line-height: 1;
+            font-size: clamp(1.75rem, 2.15vw, 2.35rem);
+            font-weight: 700;
+            margin: 8px 0 8px;
+            line-height: 1.05;
+            min-height: 60px;
+            letter-spacing: -0.02em;
         }
 
         .metric-label {
-            font-size: 1rem;
+            font-size: 0.98rem;
             font-weight: 600;
-            color: #374151;
+            color: #d9e2f0;
             margin-bottom: 4px;
+            letter-spacing: 0.01em;
         }
 
         .metric-delta {
-            font-size: 0.875rem;
-            color: #6b7280;
+            font-size: 0.93rem;
+            color: #9fb0c8;
             font-weight: 500;
+            margin-top: auto;
+            line-height: 1.35;
         }
 
         .urgency-high { border-left-color: #ef4444; }
         .urgency-medium { border-left-color: #f59e0b; }
         .urgency-low { border-left-color: #10b981; }
 
-        .action-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            margin-top: 12px;
-            transition: all 0.2s ease;
-        }
-
-        .action-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-        }
-
         /* Mobile responsive: Stack cards on small screens */
         @media (max-width: 768px) {
             .metric-card {
-                margin-bottom: 12px;
+                margin-bottom: 10px;
+                min-height: 160px;
+                padding: 12px 12px 10px;
             }
             .metric-value {
-                font-size: 2rem;
+                min-height: 52px;
             }
         }
         </style>
         """, unsafe_allow_html=True)
 
-        # Create responsive columns based on screen size
-        # For desktop: 4 columns, tablet: 2 columns, mobile: 1 column
-        num_metrics = len(metrics_data)
+        # Create responsive rows with consistent balance.
+        # Notably, 5 cards render as 3 + 2 for a cleaner visual rhythm.
+        visible_metrics = metrics_data[:8]
+        num_metrics = len(visible_metrics)
 
-        if num_metrics <= 2:
-            cols = st.columns(num_metrics)
-        elif num_metrics <= 4:
-            cols = st.columns(min(4, num_metrics))
+        if num_metrics == 0:
+            return
+
+        if num_metrics <= 3:
+            row_specs = [num_metrics]
+        elif num_metrics == 4:
+            row_specs = [4]
+        elif num_metrics == 5:
+            row_specs = [3, 2]
+        elif num_metrics == 6:
+            row_specs = [3, 3]
+        elif num_metrics == 7:
+            row_specs = [4, 3]
         else:
-            # More than 4 metrics: create multiple rows
-            cols = st.columns(4)
+            row_specs = [4, 4]
 
-        for i, metric in enumerate(metrics_data[:8]):  # Limit to 8 metrics max
-            col_index = i % len(cols)
-
-            with cols[col_index]:
-                self._render_individual_metric_card(metric)
+        metric_index = 0
+        for columns_in_row in row_specs:
+            cols = st.columns(columns_in_row)
+            for col_idx in range(columns_in_row):
+                if metric_index >= num_metrics:
+                    break
+                with cols[col_idx]:
+                    self._render_individual_metric_card(visible_metrics[metric_index])
+                metric_index += 1
 
     def _render_individual_metric_card(self, metric: HeroMetricData) -> None:
         """Render individual metric card with enhanced styling"""
@@ -217,14 +229,7 @@ class HeroMetricsUI:
         # Render the card
         st.markdown(card_html, unsafe_allow_html=True)
 
-        # Add action button if available
-        if metric.action_button:
-            if st.button(
-                metric.action_button,
-                key=f"action_{metric.label.replace(' ', '_').lower()}",
-                help=metric.tooltip
-            ):
-                self._handle_action_button_click(metric)
+        # Per-card action buttons are intentionally omitted to keep card sizes/layout consistent.
 
     def _render_action_buttons_section(self, metrics_data: List[HeroMetricData]) -> None:
         """Render quick action buttons section"""
