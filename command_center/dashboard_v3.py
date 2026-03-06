@@ -325,13 +325,8 @@ def render_admin(location_id: str) -> None:
 NAV_SECTIONS = {
     "Overview": render_overview,
     "Conversations": render_conversations,
-    "Pipeline": render_pipeline,
     "Analytics": render_analytics,
     "Integrations": render_integrations,
-    "Mobile": render_mobile,
-    "Exports": render_exports,
-    "Filters": render_filters,
-    "Admin": render_admin,
 }
 
 
