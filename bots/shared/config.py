@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     ghl_webhook_secret: Optional[str] = None
     ghl_webhook_public_key: Optional[str] = None
+    ghl_oauth_client_id: Optional[str] = None
+    ghl_oauth_client_secret: Optional[str] = None
+    ghl_oauth_redirect_uri: Optional[str] = None
+    ghl_oauth_scopes: str = "contacts.readonly contacts.write conversations.readonly conversations.write"
 
     # API Rate Limiting
     rate_limit_per_minute: int = 60
