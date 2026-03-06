@@ -51,7 +51,7 @@ class PerformanceAnalyticsComponent:
         - Cost savings analysis
         - Performance trends
         """
-        st.header("📈 Performance Analytics")
+        st.header(":material/trending_up: Performance Analytics")
 
         # Fetch performance data
         performance_data = self._fetch_performance_data()
@@ -61,7 +61,7 @@ class PerformanceAnalyticsComponent:
             self._render_overview_metrics(performance_data)
 
             # Create tabs for different analytics views
-            tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🚀 Cache Performance", "💰 Cost Savings", "📈 Trends"])
+            tab1, tab2, tab3, tab4 = st.tabs([":material/bar_chart: Overview", ":material/rocket_launch: Cache Performance", ":material/payments: Cost Savings", ":material/trending_up: Trends"])
 
             with tab1:
                 self._render_performance_overview(performance_data)
@@ -101,7 +101,7 @@ class PerformanceAnalyticsComponent:
 
         with col1:
             st.metric(
-                "🗄️ Cache Hit Rate",
+                ":material/storage: Cache Hit Rate",
                 f"{metrics['cache_hit_rate']:.1f}%",
                 delta=f"+{metrics['cache_hit_rate'] - 80:.1f}%" if metrics['cache_hit_rate'] > 80 else None,
                 help="Percentage of requests served from cache (target: >80%)"
@@ -109,7 +109,7 @@ class PerformanceAnalyticsComponent:
 
         with col2:
             st.metric(
-                "🧠 AI Response Time",
+                ":material/psychology: AI Response Time",
                 f"{metrics['ai_avg_ms']:.0f}ms",
                 delta=f"-{2000 - metrics['ai_avg_ms']:.0f}ms" if metrics['ai_avg_ms'] < 2000 else None,
                 help="Average AI analysis response time (target: <2000ms)"
@@ -117,7 +117,7 @@ class PerformanceAnalyticsComponent:
 
         with col3:
             st.metric(
-                "⚡ 5-Min Compliance",
+                ":material/bolt: 5-Min Compliance",
                 f"{metrics['five_minute_rule_compliance']:.1f}%",
                 delta=f"+{metrics['five_minute_rule_compliance'] - 95:.1f}%" if metrics['five_minute_rule_compliance'] > 95 else None,
                 help="Percentage of responses within 5-minute rule (target: >95%)"
@@ -125,7 +125,7 @@ class PerformanceAnalyticsComponent:
 
         with col4:
             st.metric(
-                "🔗 GHL API Health",
+                ":material/link: GHL API Health",
                 f"{100 - metrics['ghl_error_rate']:.1f}%",
                 delta=f"+{(100 - metrics['ghl_error_rate']) - 98:.1f}%" if metrics['ghl_error_rate'] < 2 else None,
                 help="GHL API success rate (target: >98%)"
@@ -133,7 +133,7 @@ class PerformanceAnalyticsComponent:
 
     def _render_performance_overview(self, performance_data: Dict[str, Any]) -> None:
         """Render detailed performance overview."""
-        st.subheader("🎯 Performance Overview")
+        st.subheader(":material/target: Performance Overview")
 
         if not performance_data.get('performance_metrics'):
             st.warning("Performance metrics not available")
@@ -169,7 +169,7 @@ class PerformanceAnalyticsComponent:
 
     def _render_cache_analytics(self, performance_data: Dict[str, Any]) -> None:
         """Render detailed cache analytics."""
-        st.subheader("🚀 Cache Performance Analysis")
+        st.subheader(":material/rocket_launch: Cache Performance Analysis")
 
         cache_stats = performance_data.get('cache_statistics')
         if not cache_stats:
@@ -199,7 +199,7 @@ class PerformanceAnalyticsComponent:
 
     def _render_cost_savings_analytics(self, performance_data: Dict[str, Any]) -> None:
         """Render cost savings analytics."""
-        st.subheader("💰 Cost Savings Analysis")
+        st.subheader(":material/payments: Cost Savings Analysis")
 
         cost_savings = performance_data.get('cost_savings')
         if not cost_savings:
@@ -211,21 +211,21 @@ class PerformanceAnalyticsComponent:
 
         with col1:
             st.metric(
-                "💵 Total Saved",
+                ":material/attach_money: Total Saved",
                 f"${cost_savings['total_saved_dollars']:.2f}",
                 help="Total cost savings from caching and pattern matching"
             )
 
         with col2:
             st.metric(
-                "🚫 Calls Avoided",
+                ":material/block: Calls Avoided",
                 f"{cost_savings['ai_calls_avoided']:,}",
                 help="Total AI API calls avoided through optimization"
             )
 
         with col3:
             st.metric(
-                "📈 Avg Cost/Call",
+                ":material/trending_up: Avg Cost/Call",
                 f"${cost_savings['avg_cost_per_ai_call']:.3f}",
                 help="Estimated cost per AI API call"
             )
@@ -238,7 +238,7 @@ class PerformanceAnalyticsComponent:
 
     def _render_performance_trends(self, performance_data: Dict[str, Any]) -> None:
         """Render performance trends and forecasting."""
-        st.subheader("📈 Performance Trends")
+        st.subheader(":material/trending_up: Performance Trends")
 
         # Mock trend data (in production, this would come from historical metrics)
         trend_data = self._generate_mock_trend_data()
@@ -360,7 +360,7 @@ class PerformanceAnalyticsComponent:
         daily_savings = cost_savings['total_saved_dollars']
         monthly_projection = daily_savings * 30
 
-        st.write("**📅 Monthly Savings Projection**")
+        st.write("**:material/calendar_month: Monthly Savings Projection**")
         col1, col2 = st.columns(2)
 
         with col1:
@@ -423,7 +423,7 @@ class PerformanceAnalyticsComponent:
 
     def _render_performance_predictions(self, trend_data: List[Dict[str, Any]]) -> None:
         """Render performance predictions."""
-        st.write("**🔮 Performance Predictions**")
+        st.write("**:material/insights: Performance Predictions**")
 
         col1, col2 = st.columns(2)
 
@@ -435,9 +435,9 @@ class PerformanceAnalyticsComponent:
 
         with col2:
             st.info("**Performance Recommendations**")
-            st.write("• ✅ Cache performance is optimal")
-            st.write("• ⚠️ Monitor AI response times")
-            st.write("• 🎯 Target 90%+ cache hit rate")
+            st.write("• :material/check_circle: Cache performance is optimal")
+            st.write("• :material/warning: Monitor AI response times")
+            st.write("• :material/target: Target 90%+ cache hit rate")
 
     def _generate_mock_trend_data(self) -> List[Dict[str, Any]]:
         """Generate mock trend data for demonstration."""
@@ -460,13 +460,13 @@ class PerformanceAnalyticsComponent:
 
     def _render_error_state(self) -> None:
         """Render error state when data cannot be loaded."""
-        st.error("❌ Unable to load performance analytics")
+        st.error(":material/cancel: Unable to load performance analytics")
         st.write("This could be due to:")
         st.write("• Temporary service unavailability")
         st.write("• Network connectivity issues")
         st.write("• Insufficient metrics data")
 
-        if st.button("🔄 Retry", key="retry_performance_analytics"):
+        if st.button(":material/refresh: Retry", key="retry_performance_analytics"):
             st.rerun()
 
 
@@ -490,7 +490,7 @@ if __name__ == "__main__":
     # For testing the component standalone
     st.set_page_config(
         page_title="Performance Analytics",
-        page_icon="📈",
+        page_icon=":material/trending_up:",
         layout="wide"
     )
     render_performance_analytics()

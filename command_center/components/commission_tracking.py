@@ -51,7 +51,7 @@ class CommissionTrackingComponent:
         - Forecast analysis
         - Commission trends
         """
-        st.header("💰 Commission Tracking")
+        st.header(":material/payments: Commission Tracking")
 
         # Fetch commission data
         commission_data = self._fetch_commission_data()
@@ -61,7 +61,7 @@ class CommissionTrackingComponent:
             self._render_overview_metrics(commission_data)
 
             # Create tabs for different commission views
-            tab1, tab2, tab3, tab4 = st.tabs(["📊 Pipeline", "📈 Forecasts", "📉 Trends", "🎯 Performance"])
+            tab1, tab2, tab3, tab4 = st.tabs([":material/bar_chart: Pipeline", ":material/trending_up: Forecasts", ":material/trending_down: Trends", ":material/target: Performance"])
 
             with tab1:
                 self._render_commission_pipeline(commission_data)
@@ -96,21 +96,21 @@ class CommissionTrackingComponent:
 
         with col1:
             st.metric(
-                "💰 Total Pipeline",
+                ":material/payments: Total Pipeline",
                 f"${commission_data['total_commission_potential']:,.0f}",
                 help="Total commission potential from all qualified leads"
             )
 
         with col2:
             st.metric(
-                "🔥 Hot Leads",
+                ":material/local_fire_department: Hot Leads",
                 commission_data['hot_leads_count'],
                 help="Number of high-priority qualified leads"
             )
 
         with col3:
             st.metric(
-                "📊 Avg Deal Size",
+                ":material/bar_chart: Avg Deal Size",
                 f"${commission_data['avg_commission_per_deal']:,.0f}",
                 help="Average commission per completed deal"
             )
@@ -118,7 +118,7 @@ class CommissionTrackingComponent:
         with col4:
             monthly_projection = commission_data['projected_monthly_commission']
             st.metric(
-                "📈 Monthly Forecast",
+                ":material/trending_up: Monthly Forecast",
                 f"${monthly_projection:,.0f}",
                 delta=f"${monthly_projection - commission_data['avg_commission_per_deal'] * commission_data['projected_deals']:.0f}",
                 help="Projected commission for next 30 days"
@@ -126,7 +126,7 @@ class CommissionTrackingComponent:
 
     def _render_commission_pipeline(self, commission_data: Dict[str, Any]) -> None:
         """Render commission pipeline visualization."""
-        st.subheader("💼 Commission Pipeline")
+        st.subheader(":material/work: Commission Pipeline")
 
         col1, col2 = st.columns([2, 1])
 
@@ -143,14 +143,14 @@ class CommissionTrackingComponent:
 
     def _render_commission_forecasts(self, commission_data: Dict[str, Any]) -> None:
         """Render commission forecasting."""
-        st.subheader("🔮 Commission Forecasts")
+        st.subheader(":material/insights: Commission Forecasts")
 
         # Forecast overview
         col1, col2, col3 = st.columns(3)
 
         with col1:
             st.metric(
-                "📅 30-Day Forecast",
+                ":material/calendar_month: 30-Day Forecast",
                 f"${commission_data['projected_monthly_commission']:,.0f}",
                 help="Projected commission for next 30 days"
             )
@@ -158,14 +158,14 @@ class CommissionTrackingComponent:
         with col2:
             quarterly_forecast = commission_data['projected_monthly_commission'] * 3
             st.metric(
-                "📅 90-Day Forecast",
+                ":material/calendar_month: 90-Day Forecast",
                 f"${quarterly_forecast:,.0f}",
                 help="Projected commission for next 90 days"
             )
 
         with col3:
             st.metric(
-                "🎯 Projected Deals",
+                ":material/target: Projected Deals",
                 commission_data['projected_deals'],
                 help="Expected number of deals to close"
             )
@@ -178,7 +178,7 @@ class CommissionTrackingComponent:
 
     def _render_commission_trends(self, commission_data: Dict[str, Any]) -> None:
         """Render commission trend analysis."""
-        st.subheader("📈 Commission Trends")
+        st.subheader(":material/trending_up: Commission Trends")
 
         # Historical trend chart
         if commission_data.get('commission_trend'):
@@ -196,7 +196,7 @@ class CommissionTrackingComponent:
 
     def _render_performance_analysis(self, commission_data: Dict[str, Any]) -> None:
         """Render performance analysis."""
-        st.subheader("🎯 Performance Analysis")
+        st.subheader(":material/target: Performance Analysis")
 
         # Performance metrics
         col1, col2 = st.columns(2)
@@ -305,7 +305,7 @@ class CommissionTrackingComponent:
 
     def _render_forecast_scenarios(self, commission_data: Dict[str, Any]) -> None:
         """Render forecast scenarios (conservative, expected, optimistic)."""
-        st.write("**📊 Forecast Scenarios**")
+        st.write("**:material/bar_chart: Forecast Scenarios**")
 
         base_forecast = commission_data['projected_monthly_commission']
 
@@ -482,7 +482,7 @@ class CommissionTrackingComponent:
 
     def _render_performance_recommendations(self, commission_data: Dict[str, Any]) -> None:
         """Render performance recommendations."""
-        st.write("**🎯 Recommendations**")
+        st.write("**:material/target: Recommendations**")
 
         recommendations = []
 
@@ -492,32 +492,32 @@ class CommissionTrackingComponent:
         hot_lead_ratio = (commission_data['hot_leads_count'] / max(commission_data['total_qualified_leads'], 1)) * 100
 
         if budget_pass_rate < 85:
-            recommendations.append("🎯 Improve budget validation process - currently below 85% target")
+            recommendations.append(":material/target: Improve budget validation process - currently below 85% target")
 
         if service_area_match < 90:
-            recommendations.append("📍 Focus on leads within service area - improve targeting")
+            recommendations.append(":material/location_on: Focus on leads within service area - improve targeting")
 
         if hot_lead_ratio < 30:
-            recommendations.append("🔥 Increase hot lead conversion - work on lead nurturing")
+            recommendations.append(":material/local_fire_department: Increase hot lead conversion - work on lead nurturing")
 
         if commission_data['projected_deals'] < 5:
-            recommendations.append("📈 Scale up lead generation - projected deals below target")
+            recommendations.append(":material/trending_up: Scale up lead generation - projected deals below target")
 
         if not recommendations:
-            recommendations.append("✅ Performance is on track - continue current strategies")
+            recommendations.append(":material/check_circle: Performance is on track - continue current strategies")
 
         for rec in recommendations:
             st.write(f"• {rec}")
 
     def _render_error_state(self) -> None:
         """Render error state when data cannot be loaded."""
-        st.error("❌ Unable to load commission tracking data")
+        st.error(":material/cancel: Unable to load commission tracking data")
         st.write("This could be due to:")
         st.write("• Temporary service unavailability")
         st.write("• Network connectivity issues")
         st.write("• Insufficient commission data")
 
-        if st.button("🔄 Retry", key="retry_commission_tracking"):
+        if st.button(":material/refresh: Retry", key="retry_commission_tracking"):
             st.rerun()
 
 
@@ -541,7 +541,7 @@ if __name__ == "__main__":
     # For testing the component standalone
     st.set_page_config(
         page_title="Commission Tracking",
-        page_icon="💰",
+        page_icon=":material/payments:",
         layout="wide"
     )
     render_commission_tracking()

@@ -67,7 +67,7 @@ class ActivityFeed:
 
     def render(self):
         """Render the complete activity feed component"""
-        st.subheader("📊 Real-Time Activity Feed")
+        st.subheader(":material/bar_chart: Real-Time Activity Feed")
 
         # Connection status and controls
         self._render_controls()
@@ -88,9 +88,9 @@ class ActivityFeed:
         with col1:
             # Connection status
             if st.session_state.websocket_connected:
-                st.success("🟢 Live Connected")
+                st.success(":material/check_circle: Live Connected")
             else:
-                st.warning("🟡 Polling Mode")
+                st.warning("Warm Polling Mode")
 
         with col2:
             # Auto-scroll toggle
@@ -100,12 +100,12 @@ class ActivityFeed:
 
         with col3:
             # Refresh button for manual polling
-            if st.button("🔄 Refresh Events"):
+            if st.button(":material/refresh: Refresh Events"):
                 self._manual_refresh()
 
         with col4:
             # Export button
-            if st.button("📥 Export Events"):
+            if st.button(":material/download: Export Events"):
                 self._export_events()
 
         # Event filters
@@ -398,32 +398,32 @@ class ActivityFeed:
         """Get icon and color for event type"""
         if event_type.startswith('lead.'):
             if 'error' in event_type:
-                return '🔴', 'red'
+                return ':material/cancel:', 'red'
             elif 'hot_detected' in event_type:
-                return '🔥', 'orange'
+                return ':material/local_fire_department:', 'orange'
             elif 'analyzed' in event_type:
-                return '🔵', 'blue'
+                return ':material/circle:', 'blue'
             elif 'cache_hit' in event_type:
-                return '⚡', 'green'
+                return ':material/bolt:', 'green'
             else:
-                return '🔵', 'blue'
+                return ':material/circle:', 'blue'
 
         elif event_type.startswith('ghl.'):
             if 'error' in event_type:
-                return '🔴', 'red'
+                return ':material/cancel:', 'red'
             else:
-                return '🟢', 'green'
+                return ':material/check_circle:', 'green'
 
         elif event_type.startswith('cache.'):
             if 'hit' in event_type:
-                return '💨', 'green'
+                return ':material/air:', 'green'
             elif 'miss' in event_type:
-                return '⏳', 'orange'
+                return ':material/hourglass_top:', 'orange'
             else:
-                return '💾', 'blue'
+                return ':material/save:', 'blue'
 
         elif event_type.startswith('system.'):
-            return '⚪', 'gray'
+            return ':material/radio_button_unchecked:', 'gray'
 
         return '•', 'gray'
 
@@ -437,35 +437,35 @@ class ActivityFeed:
         if event_type == 'lead.analyzed':
             score = payload.get('score', 0)
             temp = payload.get('temperature', 'warm')
-            temp_icon = '🔥' if temp == 'hot' else '🟡' if temp == 'warm' else '🔵'
+            temp_icon = ':material/local_fire_department:' if temp == 'hot' else 'Warm' if temp == 'warm' else ':material/circle:'
             return f"Lead {display_contact_id} scored {score} ({temp_icon} {temp})"
 
         elif event_type == 'lead.hot_detected':
             score = payload.get('score', 0)
-            return f"🔥 HOT LEAD {display_contact_id} (score: {score})"
+            return f":material/local_fire_department: HOT LEAD {display_contact_id} (score: {score})"
 
         elif event_type == 'lead.cache_hit':
             time_ms = payload.get('response_time_ms', 0)
-            return f"⚡ Cache hit for {display_contact_id} ({time_ms:.1f}ms)"
+            return f":material/bolt: Cache hit for {display_contact_id} ({time_ms:.1f}ms)"
 
         elif event_type == 'ghl.tag_added':
             tag = payload.get('tag', 'unknown')
-            return f"🏷️ Tag '{tag}' added to {display_contact_id}"
+            return f":material/sell: Tag '{tag}' added to {display_contact_id}"
 
         elif event_type == 'ghl.message_sent':
             msg_type = payload.get('message_type', 'unknown')
-            return f"📬 {msg_type.upper()} sent to {display_contact_id}"
+            return f":material/mark_email_read: {msg_type.upper()} sent to {display_contact_id}"
 
         elif event_type == 'cache.hit':
             time_ms = payload.get('response_time_ms', 0)
-            return f"💨 Cache hit ({time_ms:.1f}ms)"
+            return f":material/air: Cache hit ({time_ms:.1f}ms)"
 
         elif event_type == 'cache.miss':
-            return f"⏳ Cache miss - computing fresh data"
+            return f":material/hourglass_top: Cache miss - computing fresh data"
 
         elif event_type.endswith('error'):
             error_msg = payload.get('error_message', 'Unknown error')
-            return f"❌ Error: {error_msg[:50]}..."
+            return f":material/cancel: Error: {error_msg[:50]}..."
 
         else:
             return f"{event_type.replace('.', ' ').title()}"
@@ -570,7 +570,7 @@ class ActivityFeed:
 
         # Provide download button
         st.download_button(
-            label="📥 Download Events CSV",
+            label=":material/download: Download Events CSV",
             data=csv_data,
             file_name=f"jorge_activity_feed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
