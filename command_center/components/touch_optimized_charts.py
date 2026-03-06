@@ -453,7 +453,7 @@ def create_real_estate_dashboard_charts() -> List[ChartConfig]:
     return [
         ChartConfig(
             chart_type=ChartType.LINE,
-            title=":material/trending_up: Daily Lead Generation",
+            title="Daily Lead Generation",
             data=leads_data,
             x_column='date',
             y_column='leads',
@@ -462,7 +462,7 @@ def create_real_estate_dashboard_charts() -> List[ChartConfig]:
         ),
         ChartConfig(
             chart_type=ChartType.BAR,
-            title=":material/payments: Monthly Revenue",
+            title="Monthly Revenue",
             data=revenue_data,
             x_column='month',
             y_column='revenue',
@@ -470,7 +470,7 @@ def create_real_estate_dashboard_charts() -> List[ChartConfig]:
         ),
         ChartConfig(
             chart_type=ChartType.PIE,
-            title=":material/home: Property Types Distribution",
+            title="Property Types Distribution",
             data=property_data,
             x_column='property_type',
             y_column='count',
@@ -478,7 +478,7 @@ def create_real_estate_dashboard_charts() -> List[ChartConfig]:
         ),
         ChartConfig(
             chart_type=ChartType.AREA,
-            title=":material/timer: Response Time Trend",
+            title="Response Time Trend",
             data=response_data,
             x_column='week',
             y_column='avg_response_time',
@@ -494,7 +494,7 @@ def create_performance_gauge(
     """Creates a performance gauge for response time."""
     fig = create_mobile_gauge_chart(
         value=response_time,
-        title=":material/timer: Avg Response Time (minutes)",
+        title="Avg Response Time (minutes)",
         min_val=0,
         max_val=10,
         target=target_time
@@ -581,7 +581,7 @@ def add_mobile_chart_css():
 # Demo function
 def demo_touch_optimized_charts():
     """Demo function showing touch-optimized charts."""
-    st.header(":material/bar_chart: Touch-Optimized Charts Demo")
+    st.header("Touch-Optimized Charts Demo")
     
     # Add mobile CSS
     add_mobile_chart_css()
@@ -640,7 +640,7 @@ def demo_touch_optimized_charts():
     
     # Instructions
     st.markdown("""
-    ### :material/smartphone: Touch-Optimized Charts Features
+    ### Touch-Optimized Charts Features
     
     **Touch Interactions:**
     - Pinch-to-zoom on supported charts

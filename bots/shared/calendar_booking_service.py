@@ -41,7 +41,10 @@ class CalendarBookingService:
     # ------------------------------------------------------------------
 
     async def offer_appointment_slots(
-        self, contact_id: str, lead_type: str = "seller"
+        self,
+        contact_id: str,
+        lead_type: str = "seller",
+        ghl_client=None,
     ) -> Dict:
         """
         Fetch available slots and return a formatted SMS offering 1–3 options.
@@ -60,8 +63,10 @@ class CalendarBookingService:
             logger.warning("JORGE_CALENDAR_ID not configured — using fallback message")
             return {"message": FALLBACK_MESSAGE, "slots": [], "fallback": True}
 
+        active_client = ghl_client or self.ghl_client
+
         try:
-            slots = await self.ghl_client.get_free_slots(self.calendar_id)
+            slots = await active_client.get_free_slots(self.calendar_id)
         except Exception as exc:
             logger.error(f"get_free_slots error for {contact_id}: {exc}")
             return {"message": FALLBACK_MESSAGE, "slots": [], "fallback": True}
@@ -79,7 +84,11 @@ class CalendarBookingService:
         }
 
     async def book_appointment(
-        self, contact_id: str, slot_index: int, lead_type: str = "seller"
+        self,
+        contact_id: str,
+        slot_index: int,
+        lead_type: str = "seller",
+        ghl_client=None,
     ) -> Dict:
         """
         Book the selected slot for a contact.
@@ -112,11 +121,12 @@ class CalendarBookingService:
                 "message": f"Please choose a valid option (1–{len(slots)}).",
             }
 
+        active_client = ghl_client or self.ghl_client
         slot = slots[slot_index]
         title = "Seller Consultation" if lead_type == "seller" else "Buyer Consultation"
         appointment_data: Dict = {
             "calendarId": self.calendar_id,
-            "locationId": self.ghl_client.location_id,
+            "locationId": active_client.location_id,
             "contactId": contact_id,
             "startTime": slot["start"],
             "endTime": slot["end"],
@@ -127,7 +137,7 @@ class CalendarBookingService:
             appointment_data["assignedUserId"] = self.user_id
 
         try:
-            result = await self.ghl_client.create_appointment(appointment_data)
+            result = await active_client.create_appointment(appointment_data)
         except Exception as exc:
             logger.error(f"create_appointment error for {contact_id}: {exc}")
             return {

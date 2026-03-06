@@ -21,6 +21,7 @@ from bots.shared.claude_client import ClaudeClient, TaskComplexity
 from bots.shared.config import settings
 from bots.shared.event_broker import event_broker
 from bots.shared.ghl_client import GHLClient
+from bots.shared.ghl_oauth_token_store import get_ghl_oauth_token_store
 from bots.shared.logger import get_logger
 from bots.shared.models import PerformanceMetrics
 from database.repository import upsert_contact, upsert_lead
@@ -53,6 +54,19 @@ class LeadAnalyzer:
         self.cache = CacheService()
         self.performance_cache = PerformanceCache(ttl_seconds=300)  # 5-minute cache
         logger.info("LeadAnalyzer initialized with performance cache")
+
+    async def _get_ghl_client_for_location(self, location_id: Optional[str]) -> GHLClient:
+        """Resolve tenant-scoped GHL client for location with fallback to default client."""
+        location = (location_id or "").strip()
+        if not location:
+            return self.ghl
+        try:
+            token_store = get_ghl_oauth_token_store()
+            resolved = await token_store.build_client(location, fallback_client=self.ghl)
+            return resolved or self.ghl
+        except Exception as exc:
+            logger.warning(f"Failed tenant GHL client lookup for location {location}: {exc}")
+            return self.ghl
 
     async def analyze_lead(
         self,
@@ -281,11 +295,13 @@ class LeadAnalyzer:
         # Extract budget/location for Jorge validation
         analysis = self._extract_lead_details(analysis, lead_data)
 
+        location_id = lead_data.get("location_id") or lead_data.get("locationId")
+
         # Update GHL with results (non-blocking)
-        await self._update_ghl_fields(contact_id, analysis)
+        await self._update_ghl_fields(contact_id, analysis, location_id=location_id)
 
         # Send immediate follow-up based on temperature (non-blocking)
-        await self._send_followup(contact_id, analysis)
+        await self._send_followup(contact_id, analysis, location_id=location_id)
 
         return analysis
 
@@ -510,10 +526,15 @@ Be concise. Focus on actionable insights for Jorge."""
         except Exception as e:
             logger.warning(f"Failed to persist lead {contact_id}: {e}")
 
-    async def _update_ghl_fields(self, contact_id: str, analysis: Dict[str, Any]):
+    async def _update_ghl_fields(
+        self,
+        contact_id: str,
+        analysis: Dict[str, Any],
+        location_id: Optional[str] = None,
+    ):
         """Update GHL custom fields with analysis results."""
         try:
-            result = await self._async_ghl_update(contact_id, analysis)
+            result = await self._async_ghl_update(contact_id, analysis, location_id=location_id)
             success = result.get("success", False)
 
             if success:
@@ -548,19 +569,30 @@ Be concise. Focus on actionable insights for Jorge."""
             except Exception as event_error:
                 logger.warning(f"Failed to publish GHL update error event: {event_error}")
 
-    async def _async_ghl_update(self, contact_id: str, analysis: Dict[str, Any]) -> Dict:
+    async def _async_ghl_update(
+        self,
+        contact_id: str,
+        analysis: Dict[str, Any],
+        location_id: Optional[str] = None,
+    ) -> Dict:
         """Update GHL lead score fields using async client method."""
-        return await self.ghl.update_lead_score(
+        ghl_client = await self._get_ghl_client_for_location(location_id)
+        return await ghl_client.update_lead_score(
             contact_id,
             analysis["score"],
             analysis["temperature"],
         )
 
-    async def _send_followup(self, contact_id: str, analysis: Dict[str, Any]):
+    async def _send_followup(
+        self,
+        contact_id: str,
+        analysis: Dict[str, Any],
+        location_id: Optional[str] = None,
+    ):
         """Send immediate follow-up based on lead temperature."""
         try:
             temperature = analysis["temperature"]
-            result = await self._async_send_followup(contact_id, temperature)
+            result = await self._async_send_followup(contact_id, temperature, location_id=location_id)
             success = result.get("success", False)
 
             if success:
@@ -593,9 +625,15 @@ Be concise. Focus on actionable insights for Jorge."""
             except Exception as event_error:
                 logger.warning(f"Failed to publish follow-up error event: {event_error}")
 
-    async def _async_send_followup(self, contact_id: str, temperature: str) -> Dict:
+    async def _async_send_followup(
+        self,
+        contact_id: str,
+        temperature: str,
+        location_id: Optional[str] = None,
+    ) -> Dict:
         """Send follow-up using async client method."""
-        return await self.ghl.send_immediate_followup(contact_id, temperature)
+        ghl_client = await self._get_ghl_client_for_location(location_id)
+        return await ghl_client.send_immediate_followup(contact_id, temperature)
 
     def _fallback_scoring(self, lead_data: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -645,7 +645,7 @@ def create_metric_card(metric: MetricCard) -> str:
     change_html = ""
     if metric.change_percentage is not None:
         change_sign = "+" if metric.change_percentage >= 0 else ""
-        change_icon = ":material/trending_up:" if metric.change_percentage >= 0 else ":material/trending_down:"
+        change_icon = "" if metric.change_percentage >= 0 else ""
         change_html = f"""
         <div class="mobile-metric-change">
             {change_icon} {change_sign}{metric.change_percentage:.1f}% {metric.change_period}
@@ -701,7 +701,7 @@ def render_mobile_metrics_cards(
     # Create refresh button HTML
     refresh_html = ""
     if show_refresh:
-        refresh_html = '<button class="mobile-metrics-refresh" title="Refresh Metrics">:material/refresh:</button>'
+        refresh_html = '<button class="mobile-metrics-refresh" title="Refresh Metrics"></button>'
     
     # Create cards HTML
     if loading:
@@ -740,7 +740,7 @@ def get_sample_metrics() -> List[MetricCard]:
             id="total_leads",
             title="Total Leads",
             value=342,
-            icon=":material/groups:",
+            icon="",
             state=MetricState.SUCCESS,
             change_percentage=12.5,
             change_period="vs last month"
@@ -749,7 +749,7 @@ def get_sample_metrics() -> List[MetricCard]:
             id="active_conversations",
             title="Active Chats",
             value=28,
-            icon=":material/chat:",
+            icon="",
             state=MetricState.INFO,
             change_percentage=8.3,
             change_period="this week"
@@ -758,7 +758,7 @@ def get_sample_metrics() -> List[MetricCard]:
             id="revenue",
             title="Revenue",
             value=145000,
-            icon=":material/payments:",
+            icon="",
             state=MetricState.SUCCESS,
             change_percentage=23.1,
             change_period="30 days"
@@ -767,7 +767,7 @@ def get_sample_metrics() -> List[MetricCard]:
             id="conversion_rate",
             title="Conversion",
             value="8.5%",
-            icon=":material/trending_up:",
+            icon="",
             state=MetricState.WARNING,
             change_percentage=-2.1,
             change_period="this month"
@@ -776,7 +776,7 @@ def get_sample_metrics() -> List[MetricCard]:
             id="response_time",
             title="Response Time",
             value="2.3m",
-            icon=":material/timer:",
+            icon="",
             state=MetricState.SUCCESS,
             change_percentage=-15.4,
             change_period="avg"
@@ -785,7 +785,7 @@ def get_sample_metrics() -> List[MetricCard]:
             id="pipeline_value",
             title="Pipeline",
             value=890000,
-            icon=":material/home:",
+            icon="",
             state=MetricState.INFO,
             change_percentage=18.7,
             change_period="total"
@@ -796,7 +796,7 @@ def get_sample_metrics() -> List[MetricCard]:
 # Demo function
 def demo_mobile_metrics_cards():
     """Demo function showing mobile metrics cards usage."""
-    st.header(":material/bar_chart: Mobile Metrics Cards Demo")
+    st.header("Mobile Metrics Cards Demo")
     
     # Demo controls
     col1, col2, col3 = st.columns(3)
@@ -810,7 +810,7 @@ def demo_mobile_metrics_cards():
         num_cards = st.slider("Number of Cards", min_value=1, max_value=8, value=6)
     
     with col3:
-        if st.button(":material/refresh: Refresh Demo"):
+        if st.button("Refresh Demo"):
             st.rerun()
     
     # Get sample metrics
@@ -826,7 +826,7 @@ def demo_mobile_metrics_cards():
     
     # Instructions
     st.markdown("""
-    ### :material/smartphone: Mobile Metrics Cards Features
+    ### Mobile Metrics Cards Features
     
     **Touch Interactions:**
     - Horizontal scroll with momentum scrolling
@@ -854,7 +854,7 @@ def demo_mobile_metrics_cards():
     """)
     
     # Show current metrics data
-    if st.expander(":material/table_chart: Current Metrics Data"):
+    if st.expander("Current Metrics Data"):
         for metric in sample_metrics:
             st.write(f"**{metric.title}**: {metric.value} ({metric.state.value})")
 

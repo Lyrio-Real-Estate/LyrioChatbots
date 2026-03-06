@@ -1,5 +1,5 @@
 """
-Jorge Real Estate AI - Dashboard V3
+Dashboard V3.
 Consolidated command center with navigation and auth gating.
 """
 import os
@@ -66,10 +66,20 @@ from command_center.components.performance_chart import render_performance_chart
 from command_center.components.seller_bot_pipeline import SellerBotPipelineViz
 from command_center.components.touch_optimized_charts import ChartConfig, ChartType, render_touch_optimized_chart
 
+
+def _dashboard_title() -> str:
+    title = (os.getenv("DASHBOARD_TITLE") or os.getenv("APP_NAME") or "AI Dashboard").strip()
+    return title or "AI Dashboard"
+
+
+def _dashboard_subtitle() -> str:
+    subtitle = (os.getenv("DASHBOARD_SUBTITLE") or "Real-time qualification, analytics, and automation").strip()
+    return subtitle or "Real-time qualification, analytics, and automation"
+
+
 # Page config
 st.set_page_config(
-    page_title="Jorge Real Estate AI Dashboard",
-    page_icon=":material/home:",
+    page_title=_dashboard_title(),
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -109,12 +119,12 @@ def render_overview(location_id: str) -> None:
     if location_id:
         HeroMetricsUI().render_hero_metrics_section(location_id)
     else:
-        st.info("Set a GHL Location ID in the sidebar to enable ROI Command Center metrics.")
+        st.info("No authorized GHL location is configured for this account.")
 
 
 def render_conversations(location_id: str) -> None:
     st.subheader("Conversations")
-    tab1, tab2, tab3 = st.tabs([":material/table_chart: Table", ":material/psychology: Advanced", ":material/rss_feed: Activity Feed"])
+    tab1, tab2, tab3 = st.tabs(["Table", "Advanced", "Activity Feed"])
 
     with tab1:
         dashboard_data = load_dashboard_data()
@@ -155,7 +165,7 @@ def render_pipeline(location_id: str) -> None:
 
 def render_analytics(location_id: str) -> None:
     st.subheader("Analytics")
-    tab1, tab2, tab3 = st.tabs([":material/bolt: Performance", ":material/payments: Commission", ":material/psychology: Lead Intelligence"])
+    tab1, tab2, tab3 = st.tabs(["Performance", "Commission", "Lead Intelligence"])
 
     with tab1:
         PerformanceAnalyticsComponent().render()
@@ -170,13 +180,13 @@ def render_analytics(location_id: str) -> None:
 
 def render_integrations(location_id: str) -> None:
     st.subheader("Integrations")
-    tab1, tab2 = st.tabs([":material/link: GHL Status UI", ":material/receipt_long: Raw Status Data"])
+    tab1, tab2 = st.tabs(["GHL Status UI", "Raw Status Data"])
 
     with tab1:
         if location_id:
             GHLStatusUI().render_ghl_status_section(location_id)
         else:
-            st.info("Set a GHL Location ID in the sidebar to load integration status.")
+            st.info("No authorized GHL location is configured for this account.")
 
     with tab2:
         if location_id:
@@ -187,20 +197,20 @@ def render_integrations(location_id: str) -> None:
             except Exception as exc:
                 st.error(f"Failed to load raw integration data: {exc}")
         else:
-            st.info("Set a GHL Location ID to view raw integration data.")
+            st.info("No authorized GHL location is configured for this account.")
 
 
 def render_mobile(location_id: str) -> None:
     st.subheader("Mobile Experience")
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
-            ":material/smartphone: Integrated Demo",
-            ":material/bar_chart: Metrics Cards",
-            ":material/explore: Navigation",
-            ":material/view_module: Responsive Layout",
-            ":material/trending_up: Touch Charts",
-            ":material/wifi_off: Offline Indicator",
-            ":material/directions_car: Field Access",
+            "Integrated Demo",
+            "Metrics Cards",
+            "Navigation",
+            "Responsive Layout",
+            "Touch Charts",
+            "Offline Indicator",
+            "Field Access",
         ]
     )
 
@@ -242,7 +252,7 @@ def render_mobile(location_id: str) -> None:
         chart_data = sample_data["leads_data"].head(30)
         chart = ChartConfig(
             chart_type=ChartType.LINE,
-            title=":material/trending_up: Lead Velocity",
+            title="Lead Velocity",
             data=chart_data,
             x_column="date",
             y_column="leads",
@@ -346,28 +356,25 @@ if not require_permission(user, "dashboard", "read"):
     st.stop()
 
 # Page header (authenticated view only)
-st.title(":material/home: Jorge Real Estate AI Dashboard")
-st.markdown("**Real-time qualification, analytics, and automation**")
+st.title(_dashboard_title())
+st.markdown(f"**{_dashboard_subtitle()}**")
 
 
 # Sidebar controls + navigation
-default_location = settings.ghl_location_id or os.getenv("GHL_LOCATION_ID", "")
+location_id = (
+    st.session_state.get("oauth_location_id")
+    or st.session_state.get("location_id")
+    or settings.ghl_location_id
+    or os.getenv("GHL_LOCATION_ID", "")
+).strip()
+st.session_state.location_id = location_id
+
 with st.sidebar:
     st.header("Navigation")
     section = st.radio("Go to", list(NAV_SECTIONS.keys()), index=0)
-    current_location = st.session_state.get("location_id")
-    if (not current_location or str(current_location).strip().lower() == "test") and default_location:
-        current_location = default_location
+    auto_refresh = os.getenv("DASHBOARD_AUTO_REFRESH", "false").strip().lower() in {"1", "true", "yes", "on"}
 
-    location_id = st.text_input(
-        "GHL Location ID",
-        value=current_location or "",
-    )
-    st.session_state.location_id = location_id
-
-    auto_refresh = st.checkbox("Auto-refresh (30s)", value=True)
-
-    if st.button(":material/refresh: Refresh Now"):
+    if st.button("Refresh Now"):
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 

@@ -245,10 +245,10 @@ class RevenueForecaster:
 
         # Trend arrow
         trend_arrow = {
-            "up": ":material/trending_up:",
-            "down": ":material/trending_down:",
-            "neutral": ":material/chevron_right:"
-        }.get(trend, ":material/chevron_right:")
+            "up": "",
+            "down": "",
+            "neutral": ""
+        }.get(trend, "")
 
         return f"At current pace: {projected_str} | Range: {range_str} {trend_arrow}"
 
@@ -316,7 +316,7 @@ class CMAAnalyzer:
         commission = summary["total_commission_potential"]
         commission_str = f"${commission/1000:.0f}K" if commission > 1000 else f"${commission:.0f}"
 
-        return f"CMAs Ready: {count} :material/chevron_right: Est. {commission_str} commission"
+        return f"CMAs Ready: {count} Est. {commission_str} commission"
 
 
 class EnhancedHeroMetrics:
@@ -405,7 +405,7 @@ class EnhancedHeroMetrics:
                 color = "blue"
 
             return HeroMetricData(
-                label=":material/local_fire_department: Hot Leads Pipeline",
+                label="Hot Leads Pipeline",
                 value=value_text,
                 delta=delta_text,
                 color=color,
@@ -417,7 +417,7 @@ class EnhancedHeroMetrics:
         except Exception as e:
             self.logger.error(f"Error creating hot leads metric: {e}")
             return HeroMetricData(
-                label=":material/local_fire_department: Hot Leads Pipeline",
+                label="Hot Leads Pipeline",
                 value="Error loading",
                 delta="Check data sources",
                 color="red",
@@ -448,7 +448,7 @@ class EnhancedHeroMetrics:
                 color = "blue"
 
             return HeroMetricData(
-                label=":material/home: Q4 CMAs Ready",
+                label="Q4 CMAs Ready",
                 value=value_text,
                 delta=delta_text,
                 color=color,
@@ -460,7 +460,7 @@ class EnhancedHeroMetrics:
         except Exception as e:
             self.logger.error(f"Error creating CMA metric: {e}")
             return HeroMetricData(
-                label=":material/home: Q4 CMAs Ready",
+                label="Q4 CMAs Ready",
                 value="Error loading",
                 delta="Check seller data",
                 color="red",
@@ -487,14 +487,14 @@ class EnhancedHeroMetrics:
 
             # Trend indicators
             trend_indicators = {
-                "up": ("green", ":material/trending_up: Strong pipeline"),
-                "down": ("red", ":material/trending_down: Need lead generation"),
-                "neutral": ("blue", ":material/chevron_right: Steady pace")
+                "up": ("green", "Strong pipeline"),
+                "down": ("red", "Need lead generation"),
+                "neutral": ("blue", "Steady pace")
             }
-            color, trend_text = trend_indicators.get(trend, ("blue", ":material/chevron_right: Calculating"))
+            color, trend_text = trend_indicators.get(trend, ("blue", "Calculating"))
 
             return HeroMetricData(
-                label=":material/trending_up: 30-Day Forecast",
+                label="30-Day Forecast",
                 value=value_text,
                 delta=f"{trend_text} | {range_str}",
                 color=color,
@@ -505,7 +505,7 @@ class EnhancedHeroMetrics:
         except Exception as e:
             self.logger.error(f"Error creating forecast metric: {e}")
             return HeroMetricData(
-                label=":material/trending_up: 30-Day Forecast",
+                label="30-Day Forecast",
                 value="Calculating...",
                 delta="Analyzing trends",
                 color="blue",
@@ -523,18 +523,18 @@ class EnhancedHeroMetrics:
             if compliance >= 0.95:
                 color = "green"
                 urgency = "low"
-                status = ":material/target: Excellent"
+                status = "Excellent"
             elif compliance >= 0.85:
                 color = "amber"
                 urgency = "medium"
-                status = ":material/warning: Good"
+                status = "Good"
             else:
                 color = "red"
                 urgency = "high"
-                status = ":material/error: Needs attention"
+                status = "Needs attention"
 
             return HeroMetricData(
-                label=":material/bolt: 5-Min Rule",
+                label="5-Min Rule",
                 value=compliance_pct,
                 delta=f"{status} | Avg: {avg_response}ms",
                 color=color,
@@ -544,7 +544,7 @@ class EnhancedHeroMetrics:
 
         except Exception as e:
             return HeroMetricData(
-                label=":material/bolt: 5-Min Rule",
+                label="5-Min Rule",
                 value="Error",
                 delta="Check system",
                 color="red",
@@ -559,18 +559,18 @@ class EnhancedHeroMetrics:
             webhook_count = ghl_data.get("webhook_count", 0)
 
             if healthy:
-                value_text = ":material/check_circle: Operational"
+                value_text = "Operational"
                 delta_text = f"{webhook_count} webhooks | {response_time}ms"
                 color = "green"
                 urgency = "low"
             else:
-                value_text = ":material/error: Offline"
+                value_text = "Offline"
                 delta_text = "Check API connection"
                 color = "red"
                 urgency = "high"
 
             return HeroMetricData(
-                label=":material/link: GHL Integration",
+                label="GHL Integration",
                 value=value_text,
                 delta=delta_text,
                 color=color,
@@ -580,8 +580,8 @@ class EnhancedHeroMetrics:
 
         except Exception as e:
             return HeroMetricData(
-                label=":material/link: GHL Integration",
-                value=":material/error: Error",
+                label="GHL Integration",
+                value="Error",
                 delta="Check configuration",
                 color="red",
                 urgency_level="high"
@@ -715,7 +715,7 @@ class EnhancedHeroMetrics:
         """Create fallback metrics when data sources fail"""
         return [
             HeroMetricData(
-                label=":material/local_fire_department: Hot Leads Pipeline",
+                label="Hot Leads Pipeline",
                 value="Error loading",
                 delta="Please wait",
                 color="blue",
@@ -723,14 +723,14 @@ class EnhancedHeroMetrics:
                 tooltip="Loading lead data from sources"
             ),
             HeroMetricData(
-                label=":material/home: Q4 CMAs Ready",
+                label="Q4 CMAs Ready",
                 value="Error loading",
                 delta="Please wait",
                 color="blue",
                 urgency_level="low"
             ),
             HeroMetricData(
-                label=":material/trending_up: 30-Day Forecast",
+                label="30-Day Forecast",
                 value="Calculating...",
                 delta="Analyzing trends",
                 color="blue",

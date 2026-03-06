@@ -4,6 +4,7 @@ Authentication component for Streamlit dashboard.
 Provides login/logout functionality and session management.
 """
 import base64
+import html
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import streamlit as st
 
 from bots.shared.auth_service import User, UserRole, get_auth_service
 from bots.shared.config import settings
+from bots.shared.ghl_oauth_token_store import get_ghl_oauth_token_store
 from bots.shared.logger import get_logger
 from command_center.async_runtime import run_async
 
@@ -428,6 +430,41 @@ def _surrogate_email_from_payloads(*payloads: Any) -> Optional[str]:
     return None
 
 
+def _extract_location_id_from_payload(payload: Any) -> Optional[str]:
+    candidates = []
+
+    def _walk(node: Any, parent_key: str = "") -> None:
+        if isinstance(node, dict):
+            for raw_key, raw_value in node.items():
+                key = str(raw_key).strip().lower()
+                value = _normalize_identity_value(raw_value)
+                if value:
+                    if key in {"locationid", "location_id"}:
+                        candidates.append((100, value))
+                    elif key == "id" and "location" in parent_key:
+                        candidates.append((80, value))
+                    elif key.endswith("id") and "location" in key:
+                        candidates.append((70, value))
+                _walk(raw_value, parent_key=key)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item, parent_key=parent_key)
+
+    _walk(payload)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _resolve_oauth_location_id(*payloads: Any) -> Optional[str]:
+    for payload in payloads:
+        found = _extract_location_id_from_payload(payload)
+        if found:
+            return found
+    return None
+
+
 def _debug_payload_keys(payload: Any) -> str:
     if isinstance(payload, dict):
         keys = [str(key) for key in payload.keys()]
@@ -552,7 +589,32 @@ def _consume_ghl_oauth_callback() -> Optional[User]:
             st.error("Failed to create dashboard session after OAuth login.")
             return None
 
-        _set_authenticated_state(user, tokens.access_token, tokens.refresh_token)
+        oauth_location_id = _resolve_oauth_location_id(
+            identity,
+            id_token_claims,
+            access_token_claims,
+            token_payload,
+        )
+        if oauth_location_id:
+            try:
+                token_store = get_ghl_oauth_token_store()
+                run_async(
+                    token_store.store_tokens(
+                        location_id=oauth_location_id,
+                        access_token=ghl_access_token,
+                        refresh_token=token_payload.get("refresh_token"),
+                        expires_in=token_payload.get("expires_in"),
+                        token_payload=token_payload,
+                    )
+                )
+            except Exception as store_error:
+                logger.warning(f"Failed to persist GHL OAuth tokens for {oauth_location_id}: {store_error}")
+        _set_authenticated_state(
+            user,
+            tokens.access_token,
+            tokens.refresh_token,
+            oauth_location_id=oauth_location_id,
+        )
         st.success(f"Welcome, {user.name}!")
         _write_query_param("code", None)
         _write_query_param("state", None)
@@ -615,7 +677,7 @@ def _write_query_param(name: str, value: Optional[str]) -> None:
         return
 
 
-def _persist_auth_session(auth_token: str, refresh_token: str) -> None:
+def _persist_auth_session(auth_token: str, refresh_token: str, oauth_location_id: Optional[str] = None) -> None:
     """Persist auth tokens server-side and keep only opaque session id in URL."""
     try:
         auth_service = get_auth_service()
@@ -624,9 +686,11 @@ def _persist_auth_session(auth_token: str, refresh_token: str) -> None:
             session_id = secrets.token_urlsafe(24)
             st.session_state[_AUTH_SESSION_ID_KEY] = session_id
 
+        location_id = oauth_location_id or st.session_state.get("oauth_location_id")
         payload = {
             "auth_token": auth_token,
             "refresh_token": refresh_token,
+            "oauth_location_id": location_id,
         }
         run_async(
             auth_service.cache_service.set(
@@ -667,26 +731,45 @@ def _restore_auth_session() -> bool:
         st.session_state[_AUTH_SESSION_ID_KEY] = session_id
         st.session_state.auth_token = auth_token
         st.session_state.refresh_token = refresh_token
+        restored_location_id = payload.get("oauth_location_id")
+        if isinstance(restored_location_id, str) and restored_location_id.strip():
+            st.session_state.oauth_location_id = restored_location_id.strip()
+            st.session_state.location_id = restored_location_id.strip()
         _write_query_param(_AUTH_QUERY_PARAM, session_id)
         # Sliding TTL so active sessions persist while in use.
-        _persist_auth_session(auth_token, refresh_token)
+        _persist_auth_session(auth_token, refresh_token, oauth_location_id=st.session_state.get("oauth_location_id"))
         return True
     except Exception as exc:
         logger.warning(f"Failed to restore Streamlit auth session: {exc}")
         return False
 
 
-def _set_authenticated_state(user: User, auth_token: str, refresh_token: str) -> None:
+def _set_authenticated_state(
+    user: User,
+    auth_token: str,
+    refresh_token: str,
+    oauth_location_id: Optional[str] = None,
+) -> None:
+    location_id = (
+        oauth_location_id.strip()
+        if isinstance(oauth_location_id, str) and oauth_location_id.strip()
+        else st.session_state.get("oauth_location_id")
+    )
+    if location_id:
+        st.session_state.oauth_location_id = location_id
+        st.session_state.location_id = location_id
+
     st.session_state.auth_token = auth_token
     st.session_state.refresh_token = refresh_token
     st.session_state.user = {
         'user_id': user.user_id,
         'email': user.email,
         'name': user.name,
-        'role': user.role.value
+        'role': user.role.value,
+        'location_id': location_id,
     }
     st.session_state.must_change_password = user.must_change_password
-    _persist_auth_session(auth_token, refresh_token)
+    _persist_auth_session(auth_token, refresh_token, oauth_location_id=location_id)
 
 
 def _clear_persisted_auth_session() -> None:
@@ -699,9 +782,13 @@ def _clear_persisted_auth_session() -> None:
         logger.warning(f"Failed to clear persisted auth session: {exc}")
     _write_query_param(_AUTH_QUERY_PARAM, None)
     st.session_state.pop(_AUTH_SESSION_ID_KEY, None)
+    st.session_state.pop("oauth_location_id", None)
+    st.session_state.pop("location_id", None)
 
 
 def _render_oauth_setup_screen(authorize_url: str) -> None:
+    dashboard_title = (os.getenv("DASHBOARD_TITLE") or os.getenv("APP_NAME") or "AI Dashboard").strip() or "AI Dashboard"
+    safe_title = html.escape(dashboard_title)
     st.markdown(
         """
         <style>
@@ -787,7 +874,7 @@ def _render_oauth_setup_screen(authorize_url: str) -> None:
     st.markdown(
         f"""
         <section class="oauth-setup-shell">
-            <h1 class="oauth-setup-title">Welcome to Jorge AI</h1>
+            <h1 class="oauth-setup-title">Welcome to {safe_title}</h1>
             <p class="oauth-setup-subtitle">Complete setup to unlock your workspace.</p>
             <ol class="oauth-setup-list">
                 <li>Connect GoHighLevel</li>
@@ -857,11 +944,16 @@ def check_authentication() -> Optional[User]:
                 'user_id': user.user_id,
                 'email': user.email,
                 'name': user.name,
-                'role': user.role.value
+                'role': user.role.value,
+                'location_id': st.session_state.get("oauth_location_id"),
             }
             st.session_state.must_change_password = user.must_change_password
             if 'refresh_token' in st.session_state:
-                _persist_auth_session(st.session_state.auth_token, st.session_state.refresh_token)
+                _persist_auth_session(
+                    st.session_state.auth_token,
+                    st.session_state.refresh_token,
+                    oauth_location_id=st.session_state.get("oauth_location_id"),
+                )
             return user
         else:
             # Token expired or invalid, try refresh
@@ -928,20 +1020,6 @@ def render_user_menu(user: User) -> None:
         user: Authenticated user
     """
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### :material/person: User")
-    
-    # User info
-    role_emoji = {
-        'admin': ':material/shield:',
-        'agent': ':material/real_estate_agent:', 
-        'viewer': ':material/visibility:'
-    }
-    
-    emoji = role_emoji.get(user.role.value, ':material/person:')
-    st.sidebar.markdown(f"**{emoji} {user.name}**")
-    st.sidebar.markdown(f"*{user.role.value.title()}*")
-    
-    # Logout button
     if st.sidebar.button("Logout", use_container_width=True):
         clear_session()
         st.rerun()
@@ -982,7 +1060,7 @@ def require_permission(user: User, resource: str, action: str) -> bool:
     has_permission = check_permission(user, resource, action)
     
     if not has_permission:
-        st.error(f":material/block: Access Denied: You need {action} permission for {resource}")
+        st.error(f"Access denied: You need {action} permission for {resource}")
         st.info("Contact your administrator to request access.")
         return False
     
@@ -998,9 +1076,9 @@ def render_role_badge(user: User) -> None:
     }
     
     role_labels = {
-        'admin': ':material/shield: Admin',
-        'agent': ':material/real_estate_agent: Agent', 
-        'viewer': ':material/visibility: Viewer'
+        'admin': 'Admin',
+        'agent': 'Agent',
+        'viewer': 'Viewer'
     }
     
     color = role_colors.get(user.role.value, '#6c757d')
@@ -1020,7 +1098,7 @@ def render_role_badge(user: User) -> None:
 
 def create_user_management_interface() -> None:
     """Create user management interface for admins."""
-    st.markdown("### :material/groups: User Management")
+    st.markdown("### User Management")
     
     # List existing users
     try:
@@ -1033,11 +1111,11 @@ def create_user_management_interface() -> None:
                 col1, col2, col3 = st.columns([3, 2, 2])
                 with col1:
                     st.write(f"**{user.name}**")
-                    st.write(f":material/mail: {user.email}")
+                    st.write(user.email)
                 with col2:
                     render_role_badge(user)
                 with col3:
-                    status = ":material/check_circle: Active" if user.is_active else ":material/cancel: Inactive"
+                    status = "Active" if user.is_active else "Inactive"
                     st.write(status)
                 st.markdown("---")
         
@@ -1052,7 +1130,7 @@ def create_user_management_interface() -> None:
                 new_role = st.selectbox(
                     "Role", 
                     options=['agent', 'viewer', 'admin'],
-                    format_func=lambda x: {'agent': ':material/real_estate_agent: Agent', 'viewer': ':material/visibility: Viewer', 'admin': ':material/shield: Admin'}[x]
+                    format_func=lambda x: {'agent': 'Agent', 'viewer': 'Viewer', 'admin': 'Admin'}[x]
                 )
                 new_password = st.text_input("Password", type="password")
             

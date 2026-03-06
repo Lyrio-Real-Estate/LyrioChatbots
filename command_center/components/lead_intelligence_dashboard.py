@@ -56,7 +56,7 @@ class LeadIntelligenceDashboard:
         """
         # Section header
         st.markdown("""
-        <h3 style='margin-bottom: 8px;'>:material/psychology: Lead Intelligence Analytics</h3>
+        <h3 style='margin-bottom: 8px;'>Lead Intelligence Analytics</h3>
         <p style='color: #6b7280; margin-top: 0; margin-bottom: 20px;'>AI-powered lead scoring and market insights</p>
         """, unsafe_allow_html=True)
 
@@ -141,7 +141,7 @@ class LeadIntelligenceDashboard:
         if not lead_data:
             return
 
-        st.markdown("**:material/target: Score Distribution**")
+        st.markdown("**Score Distribution**")
 
         # Create score ranges
         scores = [lead["score"] for lead in lead_data]
@@ -189,18 +189,18 @@ class LeadIntelligenceDashboard:
         hot_percentage = (hot_count / total_count * 100) if total_count > 0 else 0
 
         if hot_percentage >= 30:
-            st.success(f":material/local_fire_department: {hot_percentage:.1f}% hot leads - excellent quality!")
+            st.success(f"{hot_percentage:.1f}% hot leads - excellent quality!")
         elif hot_percentage >= 20:
             st.info(f"Warm {hot_percentage:.1f}% hot leads - good performance")
         else:
-            st.warning(f":material/ac_unit: {hot_percentage:.1f}% hot leads - improve lead sources")
+            st.warning(f"{hot_percentage:.1f}% hot leads - improve lead sources")
 
     def _render_budget_analysis_chart(self, lead_data: List[Dict]) -> None:
         """Render budget range analysis with Dallas market insights"""
         if not lead_data:
             return
 
-        st.markdown("**:material/payments: Budget Analysis**")
+        st.markdown("**Budget Analysis**")
 
         # Create budget ranges aligned with Dallas market
         budget_ranges = []
@@ -253,16 +253,16 @@ class LeadIntelligenceDashboard:
         premium_percentage = (premium_count / total_count * 100) if total_count > 0 else 0
 
         if premium_percentage >= 40:
-            st.success(f":material/diamond: {premium_percentage:.1f}% premium buyers - high commission potential")
+            st.success(f"{premium_percentage:.1f}% premium buyers - high commission potential")
         else:
-            st.info(f":material/trending_up: {premium_percentage:.1f}% premium buyers - focus on lead quality")
+            st.info(f"{premium_percentage:.1f}% premium buyers - focus on lead quality")
 
     def _render_timeline_classification_chart(self, lead_data: List[Dict]) -> None:
         """Render timeline classification with urgency optimization"""
         if not lead_data:
             return
 
-        st.markdown("**:material/schedule: Timeline Analysis**")
+        st.markdown("**Timeline Analysis**")
 
         # Create timeline categories with urgency mapping
         timeline_categories = []
@@ -332,15 +332,15 @@ class LeadIntelligenceDashboard:
         urgent_percentage = (urgent_count / total_count * 100) if total_count > 0 else 0
 
         if urgent_percentage >= 50:
-            st.success(f":material/bolt: {urgent_percentage:.1f}% urgent timeline - prioritize follow-up")
+            st.success(f"{urgent_percentage:.1f}% urgent timeline - prioritize follow-up")
         elif urgent_percentage >= 30:
-            st.info(f":material/target: {urgent_percentage:.1f}% urgent timeline - good conversion potential")
+            st.info(f"{urgent_percentage:.1f}% urgent timeline - good conversion potential")
         else:
-            st.warning(f":material/hourglass_top: {urgent_percentage:.1f}% urgent timeline - focus on nurturing")
+            st.warning(f"{urgent_percentage:.1f}% urgent timeline - focus on nurturing")
 
     def _render_geographic_heatmap(self, lead_data: List[Dict]) -> None:
         """Render geographic performance heatmap"""
-        st.markdown("**:material/location_on: Geographic Performance**")
+        st.markdown("**Geographic Performance**")
 
         # Aggregate data by location
         location_data = {}
@@ -406,11 +406,11 @@ class LeadIntelligenceDashboard:
 
         # Add geographic insight
         best_location = geo_df.loc[geo_df["Hot Rate"].idxmax()]
-        st.info(f":material/emoji_events: Best performing area: {best_location['Location']} ({best_location['Hot Rate']:.1f}% hot rate)")
+        st.info(f"Best performing area: {best_location['Location']} ({best_location['Hot Rate']:.1f}% hot rate)")
 
     def _render_source_performance_chart(self, lead_data: List[Dict]) -> None:
         """Render lead source performance analytics"""
-        st.markdown("**:material/bar_chart: Source Performance**")
+        st.markdown("**Source Performance**")
 
         # Aggregate data by source
         source_data = {}
@@ -493,11 +493,11 @@ class LeadIntelligenceDashboard:
         # Add source performance insight
         if len(source_df) > 0:
             best_source = source_df.loc[source_df["Hot Rate"].idxmax()]
-            st.success(f":material/target: Best source: {best_source['Source']} ({best_source['Hot Rate']:.1f}% hot rate)")
+            st.success(f"Best source: {best_source['Source']} ({best_source['Hot Rate']:.1f}% hot rate)")
 
     def _render_predictive_insights_section(self, lead_data: List[Dict]) -> None:
         """Render predictive insights and recommendations"""
-        st.markdown("### :material/insights: Predictive Insights & Recommendations")
+        st.markdown("### Predictive Insights & Recommendations")
 
         col1, col2, col3 = st.columns(3)
 
@@ -512,7 +512,7 @@ class LeadIntelligenceDashboard:
 
     def _render_scoring_trends(self, lead_data: List[Dict]) -> None:
         """Render lead scoring trends over time"""
-        st.markdown("**:material/trending_up: Scoring Trends**")
+        st.markdown("**Scoring Trends**")
 
         # Create time-series data (mock)
         dates = [datetime.now() - timedelta(days=i) for i in range(7, 0, -1)]
@@ -546,7 +546,7 @@ class LeadIntelligenceDashboard:
 
     def _render_conversion_predictions(self, lead_data: List[Dict]) -> None:
         """Render conversion predictions"""
-        st.markdown("**:material/target: Conversion Forecast**")
+        st.markdown("**Conversion Forecast**")
 
         # Mock conversion prediction data
         hot_leads = len([l for l in lead_data if l.get("score", 0) >= 80])
@@ -586,7 +586,7 @@ class LeadIntelligenceDashboard:
 
     def _render_actionable_recommendations(self, lead_data: List[Dict]) -> None:
         """Render AI-powered actionable recommendations"""
-        st.markdown("**:material/target: Action Items**")
+        st.markdown("**Action Items**")
 
         # Analyze data for recommendations
         hot_count = len([l for l in lead_data if l.get("score", 0) >= 80])
@@ -596,27 +596,27 @@ class LeadIntelligenceDashboard:
         recommendations = []
 
         if hot_count >= 5:
-            recommendations.append(":material/local_fire_department: Call top 5 hot leads within 2 hours")
+            recommendations.append("Call top 5 hot leads within 2 hours")
 
         if urgent_count >= 3:
-            recommendations.append(":material/bolt: Prioritize urgent timeline leads")
+            recommendations.append("Prioritize urgent timeline leads")
 
         if premium_count >= 2:
-            recommendations.append(":material/diamond: Focus on premium budget leads")
+            recommendations.append("Focus on premium budget leads")
 
         recommendations.extend([
-            ":material/call: Send follow-up to warm Zillow leads",
-            ":material/bar_chart: Generate CMAs for Q4 sellers"
+            "Send follow-up to warm Zillow leads",
+            "Generate CMAs for Q4 sellers"
         ])
 
         # Display recommendations as action items
         for i, rec in enumerate(recommendations[:4]):  # Top 4 recommendations
             if st.button(rec, key=f"rec_{i}", use_container_width=True):
-                st.success(f":material/check_circle: Action triggered: {rec}")
+                st.success(f"Action triggered: {rec}")
 
     def _render_loading_state(self) -> None:
         """Render loading state for lead intelligence"""
-        st.markdown("### :material/psychology: Lead Intelligence Analytics")
+        st.markdown("### Lead Intelligence Analytics")
         st.markdown("*Loading AI-powered insights...*")
 
         # Skeleton loading

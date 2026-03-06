@@ -732,28 +732,28 @@ class GHLIntegrationStatusComponent:
         alerts: List[str] = []
 
         if connection.status == ConnectionStatus.DISCONNECTED:
-            alerts.append(":material/error: GHL connection is down")
+            alerts.append("GHL connection is down")
         elif connection.status == ConnectionStatus.RATE_LIMITED:
-            alerts.append(":material/warning: GHL API is rate limited")
+            alerts.append("GHL API is rate limited")
         elif connection.status == ConnectionStatus.DEGRADED:
-            alerts.append(":material/warning: GHL connection is degraded")
+            alerts.append("GHL connection is degraded")
 
         if connection.errors_last_hour > 5:
-            alerts.append(f":material/warning: High error rate: {connection.errors_last_hour} errors in last hour")
+            alerts.append(f"High error rate: {connection.errors_last_hour} errors in last hour")
 
         if webhooks.backlog_count > 10:
-            alerts.append(f":material/warning: Webhook backlog: {webhooks.backlog_count} pending")
+            alerts.append(f"Webhook backlog: {webhooks.backlog_count} pending")
 
         for automation in automations:
             if automation.status == AutomationStatus.ERROR:
-                alerts.append(f":material/cancel: {automation.name} failed")
+                alerts.append(f"{automation.name} failed")
             elif automation.status == AutomationStatus.PAUSED and automation.leads_processed > 0:
-                alerts.append(f":material/pause_circle: {automation.name} is paused")
+                alerts.append(f"{automation.name} is paused")
             elif automation.errors_today > 5:
-                alerts.append(f":material/warning: {automation.name}: {automation.errors_today} errors today")
+                alerts.append(f"{automation.name}: {automation.errors_today} errors today")
 
         if connection.rate_limit_known and 0 <= connection.rate_limit_remaining < 1000:
-            alerts.append(f":material/warning: Rate limit low: {connection.rate_limit_remaining} remaining")
+            alerts.append(f"Rate limit low: {connection.rate_limit_remaining} remaining")
 
         return alerts
 
@@ -784,7 +784,7 @@ class GHLIntegrationStatusComponent:
             webhooks=webhooks,
             automations=[],
             daily_stats={},
-            alerts=[f":material/error: Connection Error: {error_msg}"]
+            alerts=[f"Connection Error: {error_msg}"]
         )
 
     def create_status_overview_chart(self, data: GHLIntegrationData) -> go.Figure:
@@ -884,7 +884,7 @@ class GHLIntegrationStatusComponent:
 
         # Update layout
         fig.update_layout(
-            title=":material/link: GHL Integration Health Overview",
+            title="GHL Integration Health Overview",
             height=600,
             showlegend=False,
             margin=dict(l=50, r=50, t=80, b=50)
@@ -941,7 +941,7 @@ class GHLIntegrationStatusComponent:
             )
 
         fig.update_layout(
-            title=":material/smart_toy: Automation Pipeline Performance",
+            title="Automation Pipeline Performance",
             xaxis_title="Success Rate (%)",
             yaxis_title="",
             height=300 + len(data.automations) * 40,
@@ -981,7 +981,7 @@ class GHLIntegrationStatusComponent:
         )
 
         fig.update_layout(
-            title=f":material/rss_feed: Webhook Health - {data.webhooks.total_received} Total Received",
+            title=f"Webhook Health - {data.webhooks.total_received} Total Received",
             height=400,
             annotations=[dict(text=f"Total<br>{data.webhooks.total_received}", x=0.5, y=0.5,
                             font_size=16, showarrow=False)]
