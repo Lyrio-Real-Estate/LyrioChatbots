@@ -138,10 +138,30 @@ class GHLStatusUI:
 
         st.markdown("### Active Alerts")
 
-        # Group alerts by severity
-        critical_alerts = [alert for alert in status_data.alerts if "" in alert or "" in alert]
-        warning_alerts = [alert for alert in status_data.alerts if "" in alert]
-        info_alerts = [alert for alert in status_data.alerts if "" in alert]
+        # Deduplicate first so the same message never renders multiple times.
+        unique_alerts = []
+        seen = set()
+        for raw_alert in status_data.alerts:
+            if not isinstance(raw_alert, str):
+                continue
+            alert = raw_alert.strip()
+            if not alert or alert in seen:
+                continue
+            seen.add(alert)
+            unique_alerts.append(alert)
+
+        critical_alerts = []
+        warning_alerts = []
+        info_alerts = []
+
+        for alert in unique_alerts:
+            lower = alert.lower()
+            if any(token in lower for token in (" down", "failed", "error", "disconnected", "backlog", "connection error")):
+                critical_alerts.append(alert)
+            elif any(token in lower for token in ("degraded", "paused", "rate limit", "rate-limited")):
+                warning_alerts.append(alert)
+            else:
+                info_alerts.append(alert)
 
         # Critical alerts
         if critical_alerts:
