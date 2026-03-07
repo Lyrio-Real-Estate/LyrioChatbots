@@ -787,89 +787,169 @@ def _clear_persisted_auth_session() -> None:
 
 
 def _render_oauth_setup_screen(authorize_url: str) -> None:
-    dashboard_title = (os.getenv("DASHBOARD_TITLE") or os.getenv("APP_NAME") or "AI Dashboard").strip() or "AI Dashboard"
+    dashboard_title = (os.getenv("DASHBOARD_TITLE") or os.getenv("APP_NAME") or "Lyrio AI Dashboard").strip() or "Lyrio AI Dashboard"
     safe_title = html.escape(dashboard_title)
-    st.markdown(
-        """
-        <style>
+    safe_authorize_url = html.escape(authorize_url, quote=True)
+    raw_theme = (
+        st.session_state.get("ui_theme")
+        or _read_query_param("theme")
+        or os.getenv("DASHBOARD_THEME", "dark")
+    )
+    theme_mode = str(raw_theme or "").strip().lower()
+    is_light = theme_mode == "light"
+
+    if is_light:
+        app_bg = "#f3f6fb"
+        title_color = "#0f172a"
+        subtitle_color = "#334155"
+        list_color = "#1e293b"
+        divider_color = "rgba(148, 163, 184, 0.45)"
+        callout_border = "rgba(59, 130, 246, 0.35)"
+        callout_bg = "rgba(59, 130, 246, 0.12)"
+        callout_text = "#1e3a8a"
+        link_text = "#0f172a"
+        link_border = "rgba(148, 163, 184, 0.55)"
+        link_bg = "rgba(255, 255, 255, 0.92)"
+        link_hover_bg = "rgba(241, 245, 249, 0.98)"
+        caption_color = "#475569"
+    else:
+        app_bg = "#030712"
+        title_color = "#f8fafc"
+        subtitle_color = "rgba(241, 245, 249, 0.88)"
+        list_color = "rgba(241, 245, 249, 0.94)"
+        divider_color = "rgba(148, 163, 184, 0.24)"
+        callout_border = "rgba(59, 130, 246, 0.45)"
+        callout_bg = "rgba(30, 58, 138, 0.35)"
+        callout_text = "#dbeafe"
+        link_text = "#e2e8f0"
+        link_border = "rgba(148, 163, 184, 0.35)"
+        link_bg = "rgba(15, 23, 42, 0.55)"
+        link_hover_bg = "rgba(30, 41, 59, 0.9)"
+        caption_color = "#94a3b8"
+
+    auth_css = """
+    <style>
+    /* Hide Streamlit chrome on auth/setup screens. */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    [data-testid="stToolbar"] {
+        display: none !important;
+    }
+    [data-testid="stDecoration"] {
+        display: none !important;
+    }
+    [data-testid="stAppViewContainer"] {
+        margin-top: 0 !important;
+        background: __APP_BG__ !important;
+    }
+    [data-testid="stMain"] {
+        background: __APP_BG__ !important;
+    }
+
+    .oauth-setup-shell {
+        max-width: 1200px;
+        margin: 2.5rem auto 0 auto;
+        padding: 0 1rem 1rem 1rem;
+    }
+    .oauth-setup-title {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 3.6rem);
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        color: __TITLE_COLOR__;
+    }
+    .oauth-setup-subtitle {
+        margin: 0.8rem 0 1.6rem 0;
+        font-size: 1.25rem;
+        color: __SUBTITLE_COLOR__;
+    }
+    .oauth-setup-list {
+        margin: 0 0 2.1rem 0;
+        padding-left: 1.4rem;
+        color: __LIST_COLOR__;
+        font-size: 1.18rem;
+        line-height: 1.75;
+    }
+    .oauth-divider {
+        border: 0;
+        border-top: 1px solid __DIVIDER_COLOR__;
+        margin: 2.2rem 0 1.8rem 0;
+    }
+    .oauth-callout {
+        border: 1px solid __CALLOUT_BORDER__;
+        background: __CALLOUT_BG__;
+        border-radius: 0.7rem;
+        color: __CALLOUT_TEXT__;
+        padding: 0.95rem 1rem;
+        margin-bottom: 1rem;
+        font-size: 1.02rem;
+        font-weight: 500;
+    }
+    .oauth-connect-link {
+        appearance: none;
+        -webkit-appearance: none;
+        display: block;
+        width: 100%;
+        text-align: center;
+        text-decoration: none;
+        color: __LINK_TEXT__;
+        border: 1px solid __LINK_BORDER__;
+        border-radius: 0.65rem;
+        padding: 0.78rem 1rem;
+        font-size: 1.08rem;
+        font-weight: 600;
+        transition: border-color 0.2s ease, background 0.2s ease, transform 0.1s ease;
+        background: __LINK_BG__;
+        cursor: pointer;
+    }
+    .oauth-connect-form {
+        margin: 0;
+    }
+    .oauth-connect-link:hover {
+        border-color: rgba(96, 165, 250, 0.9);
+        background: __LINK_HOVER_BG__;
+        transform: translateY(-1px);
+    }
+    .oauth-connect-link:active {
+        transform: translateY(0);
+    }
+    .stCaption {
+        color: __CAPTION_COLOR__ !important;
+    }
+    @media (max-width: 768px) {
         .oauth-setup-shell {
-            max-width: 1200px;
-            margin: 2.5rem auto 0 auto;
-            padding: 0 1rem 1rem 1rem;
-        }
-        .oauth-setup-title {
-            margin: 0;
-            font-size: clamp(2rem, 4vw, 3.6rem);
-            font-weight: 700;
-            line-height: 1.15;
-            letter-spacing: -0.02em;
+            margin-top: 1.5rem;
+            padding: 0 0.3rem;
         }
         .oauth-setup-subtitle {
-            margin: 0.8rem 0 1.6rem 0;
-            font-size: 1.25rem;
-            color: rgba(241, 245, 249, 0.88);
+            font-size: 1.02rem;
         }
         .oauth-setup-list {
-            margin: 0 0 2.1rem 0;
-            padding-left: 1.4rem;
-            color: rgba(241, 245, 249, 0.94);
-            font-size: 1.18rem;
-            line-height: 1.75;
+            font-size: 1rem;
+            line-height: 1.6;
         }
-        .oauth-divider {
-            border: 0;
-            border-top: 1px solid rgba(148, 163, 184, 0.24);
-            margin: 2.2rem 0 1.8rem 0;
-        }
-        .oauth-callout {
-            border: 1px solid rgba(59, 130, 246, 0.45);
-            background: rgba(30, 58, 138, 0.35);
-            border-radius: 0.7rem;
-            color: #dbeafe;
-            padding: 0.95rem 1rem;
-            margin-bottom: 1rem;
-            font-size: 1.02rem;
-            font-weight: 500;
-        }
-        .oauth-connect-link {
-            display: block;
-            width: 100%;
-            text-align: center;
-            text-decoration: none;
-            color: #e2e8f0;
-            border: 1px solid rgba(148, 163, 184, 0.35);
-            border-radius: 0.65rem;
-            padding: 0.78rem 1rem;
-            font-size: 1.08rem;
-            font-weight: 600;
-            transition: border-color 0.2s ease, background 0.2s ease, transform 0.1s ease;
-            background: rgba(15, 23, 42, 0.55);
-        }
-        .oauth-connect-link:hover {
-            border-color: rgba(96, 165, 250, 0.9);
-            background: rgba(30, 41, 59, 0.9);
-            transform: translateY(-1px);
-        }
-        .oauth-connect-link:active {
-            transform: translateY(0);
-        }
-        @media (max-width: 768px) {
-            .oauth-setup-shell {
-                margin-top: 1.5rem;
-                padding: 0 0.3rem;
-            }
-            .oauth-setup-subtitle {
-                font-size: 1.02rem;
-            }
-            .oauth-setup-list {
-                font-size: 1rem;
-                line-height: 1.6;
-            }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
+    }
+    </style>
+    """
+    auth_css = (
+        auth_css
+        .replace("__APP_BG__", app_bg)
+        .replace("__TITLE_COLOR__", title_color)
+        .replace("__SUBTITLE_COLOR__", subtitle_color)
+        .replace("__LIST_COLOR__", list_color)
+        .replace("__DIVIDER_COLOR__", divider_color)
+        .replace("__CALLOUT_BORDER__", callout_border)
+        .replace("__CALLOUT_BG__", callout_bg)
+        .replace("__CALLOUT_TEXT__", callout_text)
+        .replace("__LINK_TEXT__", link_text)
+        .replace("__LINK_BORDER__", link_border)
+        .replace("__LINK_BG__", link_bg)
+        .replace("__LINK_HOVER_BG__", link_hover_bg)
+        .replace("__CAPTION_COLOR__", caption_color)
     )
+    st.markdown(auth_css, unsafe_allow_html=True)
 
     st.markdown(
         f"""
@@ -882,7 +962,7 @@ def _render_oauth_setup_screen(authorize_url: str) -> None:
             </ol>
             <hr class="oauth-divider" />
             <div class="oauth-callout">Connect your GoHighLevel account to continue.</div>
-            <a class="oauth-connect-link" href="{authorize_url}">Connect GoHighLevel</a>
+            <a class="oauth-connect-link" href="{safe_authorize_url}" target="_blank" rel="noopener noreferrer">Connect GoHighLevel</a>
         </section>
         """,
         unsafe_allow_html=True,

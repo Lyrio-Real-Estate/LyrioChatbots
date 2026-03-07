@@ -98,7 +98,12 @@ class GHLStatusUI:
             """, unsafe_allow_html=True)
 
         with col2:
-            if st.button("", help="Refresh status", key="refresh_ghl_status"):
+            if st.button(
+                "Refresh Status",
+                help="Refresh status",
+                key="refresh_ghl_status",
+                use_container_width=True,
+            ):
                 st.cache_data.clear()
                 st.rerun()
 

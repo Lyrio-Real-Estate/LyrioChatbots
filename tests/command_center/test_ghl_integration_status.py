@@ -328,6 +328,81 @@ class TestGHLIntegrationStatusComponent:
 
             assert any("Rate limit low" in alert for alert in result.alerts)
 
+    @pytest.mark.asyncio
+    async def test_fetch_ghl_health_prefers_oauth_token(self, integration_component, monkeypatch):
+        """Health check should use location OAuth token before legacy global key."""
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.setenv("GHL_API_KEY", "legacy-api-key")
+
+        captured = {}
+
+        class _DummyTokenStore:
+            async def get_access_token(self, location_id):
+                assert location_id == "loc_oauth"
+                return "oauth-access-token"
+
+        class _Response:
+            status_code = 200
+            headers = {"x-ratelimit-remaining": "1234"}
+
+        class _Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, headers, params):
+                captured["url"] = url
+                captured["authorization"] = headers.get("Authorization")
+                captured["params"] = params
+                return _Response()
+
+        with patch("bots.shared.ghl_oauth_token_store.get_ghl_oauth_token_store", return_value=_DummyTokenStore()):
+            with patch("httpx.AsyncClient", return_value=_Client()):
+                health = await integration_component._fetch_ghl_health("loc_oauth")
+
+        assert health["healthy"] is True
+        assert captured["authorization"] == "Bearer oauth-access-token"
+        assert captured["params"]["locationId"] == "loc_oauth"
+
+    @pytest.mark.asyncio
+    async def test_fetch_ghl_health_falls_back_to_global_key(self, integration_component, monkeypatch):
+        """Health check should fall back to GHL_API_KEY when OAuth token is unavailable."""
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.setenv("GHL_API_KEY", "legacy-api-key")
+
+        captured = {}
+
+        class _DummyTokenStore:
+            async def get_access_token(self, location_id):
+                assert location_id == "loc_legacy"
+                return None
+
+        class _Response:
+            status_code = 200
+            headers = {"x-ratelimit-remaining": "999"}
+
+        class _Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, headers, params):
+                captured["authorization"] = headers.get("Authorization")
+                captured["params"] = params
+                return _Response()
+
+        with patch("bots.shared.ghl_oauth_token_store.get_ghl_oauth_token_store", return_value=_DummyTokenStore()):
+            with patch("httpx.AsyncClient", return_value=_Client()):
+                health = await integration_component._fetch_ghl_health("loc_legacy")
+
+        assert health["healthy"] is True
+        assert captured["authorization"] == "Bearer legacy-api-key"
+        assert captured["params"]["locationId"] == "loc_legacy"
+
     def test_create_status_overview_chart(self, integration_component, sample_integration_data):
         """Test status overview chart creation"""
         chart = integration_component.create_status_overview_chart(sample_integration_data)
