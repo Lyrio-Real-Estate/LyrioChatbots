@@ -35,14 +35,20 @@ def _build_engine():
             echo=False,
             future=True,
         )
+    pool_size = max(1, int(settings.db_pool_size or 1))
+    max_overflow = max(0, int(settings.db_max_overflow or 0))
+    pool_timeout = max(1, int(settings.db_pool_timeout_seconds or 1))
+    pool_recycle = max(60, int(settings.db_pool_recycle_seconds or 60))
     return create_async_engine(
         ASYNC_DATABASE_URL,
         echo=False,
         future=True,
-        pool_size=10,
-        max_overflow=0,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
         pool_pre_ping=True,
-        pool_timeout=30,
+        pool_timeout=pool_timeout,
+        pool_recycle=pool_recycle,
+        pool_use_lifo=bool(settings.db_pool_use_lifo),
     )
 
 

@@ -201,11 +201,26 @@ class AuthService:
                 return None
 
             user.last_login = _utcnow_naive()
-            await self._store_user(user)
+            try:
+                await self._store_user(user)
+            except Exception as store_user_error:
+                # Do not block OAuth/login session issuance if last_login persistence fails.
+                logger.warning(
+                    f"Could not persist last_login for {getattr(user, 'email', 'unknown')}: {store_user_error}"
+                )
 
             tokens = await self._generate_tokens(user)
+
             refresh_expires = _utcnow_naive() + timedelta(days=self.refresh_token_expire_days)
-            await self._store_session(user.user_id, tokens.refresh_token, refresh_expires)
+            try:
+                await self._store_session(user.user_id, tokens.refresh_token, refresh_expires)
+            except Exception as store_session_error:
+                # Keep user logged in with valid access token even if refresh-session
+                # persistence fails (e.g., transient DB or migrations mismatch).
+                logger.warning(
+                    "Refresh session persistence failed for "
+                    f"{getattr(user, 'email', 'unknown')}: {store_session_error}"
+                )
             return tokens
         except Exception as e:
             logger.exception(f"Error creating tokens for user {getattr(user, 'email', 'unknown')}: {e}")
@@ -534,6 +549,10 @@ class AuthService:
         """Hash refresh token for storage."""
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
+    def _refresh_session_cache_key(self, token_hash: str) -> str:
+        """Cache key for refresh-session fallback storage."""
+        return f"auth:session:{token_hash}"
+
     def _user_from_model(self, model: UserModel, include_password: bool = False) -> User:
         """Convert ORM model to User dataclass."""
         user = User(
@@ -552,30 +571,68 @@ class AuthService:
     async def _store_session(self, user_id: str, refresh_token: str, expires_at: datetime) -> None:
         """Persist refresh token session."""
         token_hash = self._hash_token(refresh_token)
-        async with AsyncSessionFactory() as session:
-            session.add(
-                SessionModel(
-                    user_id=user_id,
-                    token_hash=token_hash,
-                    expires_at=expires_at,
+        cache_key = self._refresh_session_cache_key(token_hash)
+        ttl_seconds = max(60, int((expires_at - _utcnow_naive()).total_seconds()))
+        cache_payload = {"user_id": user_id, "expires_at": expires_at.isoformat()}
+
+        try:
+            async with AsyncSessionFactory() as session:
+                session.add(
+                    SessionModel(
+                        user_id=user_id,
+                        token_hash=token_hash,
+                        expires_at=expires_at,
+                    )
                 )
-            )
-            await session.commit()
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"DB session store failed, using cache fallback: {e}")
+        finally:
+            # Always mirror to cache so refresh can still work during transient DB pressure.
+            await self.cache_service.set(cache_key, cache_payload, ttl=ttl_seconds)
 
     async def _session_exists(self, refresh_token: str) -> bool:
         """Check if refresh token session exists and is valid."""
         token_hash = self._hash_token(refresh_token)
-        async with AsyncSessionFactory() as session:
-            stmt = select(SessionModel).where(SessionModel.token_hash == token_hash)
-            result = await session.execute(stmt)
-            session_row = result.scalars().first()
-            if not session_row:
-                return False
-            if session_row.expires_at < _utcnow_naive():
-                await session.delete(session_row)
-                await session.commit()
-                return False
-            return True
+        cache_key = self._refresh_session_cache_key(token_hash)
+
+        try:
+            async with AsyncSessionFactory() as session:
+                stmt = select(SessionModel).where(SessionModel.token_hash == token_hash)
+                result = await session.execute(stmt)
+                session_row = result.scalars().first()
+                if session_row:
+                    if session_row.expires_at < _utcnow_naive():
+                        await session.delete(session_row)
+                        await session.commit()
+                        await self.cache_service.delete(cache_key)
+                        return False
+                    # Keep cache in sync for resilience.
+                    ttl_seconds = max(60, int((session_row.expires_at - _utcnow_naive()).total_seconds()))
+                    await self.cache_service.set(
+                        cache_key,
+                        {"user_id": session_row.user_id, "expires_at": session_row.expires_at.isoformat()},
+                        ttl=ttl_seconds,
+                    )
+                    return True
+        except Exception as e:
+            logger.warning(f"DB session lookup failed, falling back to cache: {e}")
+
+        cached = await self.cache_service.get(cache_key)
+        if not isinstance(cached, dict):
+            return False
+
+        expires_raw = cached.get("expires_at")
+        try:
+            expires_at = datetime.fromisoformat(str(expires_raw))
+        except Exception:
+            await self.cache_service.delete(cache_key)
+            return False
+
+        if expires_at < _utcnow_naive():
+            await self.cache_service.delete(cache_key)
+            return False
+        return True
 
     async def change_password(self, user_id: str, new_password: str) -> bool:
         """Change a user's password and clear must_change_password flag."""

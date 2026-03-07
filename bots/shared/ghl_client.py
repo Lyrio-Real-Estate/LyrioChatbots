@@ -15,6 +15,7 @@ Features:
 - Batch operations
 - Health monitoring
 """
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -33,6 +34,7 @@ def _is_retryable_ghl_error(exc: BaseException) -> bool:
 from bots.shared.config import settings
 from bots.shared.event_broker import event_broker
 from bots.shared.logger import get_logger
+from bots.shared.performance_tracker import get_performance_tracker
 
 logger = get_logger(__name__)
 
@@ -86,6 +88,19 @@ class GHLClient:
         }
 
         self._client: Optional[httpx.AsyncClient] = None
+        self.performance_tracker = get_performance_tracker()
+
+    async def _record_ghl_call_metric(self, started_at: float, success: bool, endpoint: str) -> None:
+        """Record GHL call latency/success metrics without impacting request flow."""
+        try:
+            latency_ms = max((time.time() - started_at) * 1000.0, 0.0)
+            await self.performance_tracker.record_ghl_call(
+                response_time_ms=latency_ms,
+                success=success,
+                endpoint=endpoint,
+            )
+        except Exception as metric_exc:
+            logger.debug(f"Failed to record GHL call metric: {metric_exc}")
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -129,6 +144,7 @@ class GHLClient:
         """
         url = f"{self.BASE_URL}/{endpoint}"
         client = self._get_client()
+        started_at = time.time()
 
         try:
             response = await client.request(
@@ -140,6 +156,7 @@ class GHLClient:
             )
 
             response.raise_for_status()
+            await self._record_ghl_call_metric(started_at, True, endpoint)
 
             return {
                 "success": True,
@@ -148,6 +165,7 @@ class GHLClient:
             }
 
         except httpx.HTTPStatusError as e:
+            await self._record_ghl_call_metric(started_at, False, endpoint)
             if e.response.status_code in (429, 502, 503):
                 logger.warning(f"GHL retryable error {e.response.status_code}, will retry: {e}")
                 raise  # Let tenacity retry
@@ -159,9 +177,11 @@ class GHLClient:
                 "details": e.response.json() if e.response.content else {}
             }
         except (httpx.TimeoutException, httpx.NetworkError) as e:
+            await self._record_ghl_call_metric(started_at, False, endpoint)
             logger.error(f"GHL network/timeout error: {e}")
             raise  # Retry these
         except Exception as e:
+            await self._record_ghl_call_metric(started_at, False, endpoint)
             logger.error(f"GHL request error: {e}")
             return {
                 "success": False,

@@ -42,6 +42,7 @@ class TestMetricsService:
         mock.get_performance_metrics = AsyncMock()
         mock.get_cache_statistics = AsyncMock()
         mock.get_cost_savings = AsyncMock()
+        mock.get_response_time_distribution = AsyncMock()
         return mock
 
     @pytest.mark.asyncio
@@ -202,6 +203,37 @@ class TestMetricsService:
             # Verify result
             assert result == expected_savings
             assert result.total_saved_dollars == 245.50
+
+    @pytest.mark.asyncio
+    async def test_get_response_time_distribution_success(
+        self,
+        metrics_service,
+        mock_cache_service,
+        mock_performance_tracker,
+    ):
+        """Test getting live response-time distribution successfully."""
+        mock_cache_service.get.return_value = None
+        expected_distribution = {
+            "labels": ["0-100ms", "100-200ms", "200-400ms", "400-800ms", "800-1.2s", "1.2-2s", "2-4s", "4-8s", "8s+"],
+            "cache_hits_pct": [10.0, 20.0, 30.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "ai_calls_pct": [5.0, 10.0, 25.0, 25.0, 15.0, 10.0, 5.0, 3.0, 2.0],
+            "ghl_calls_pct": [8.0, 12.0, 20.0, 20.0, 15.0, 10.0, 8.0, 4.0, 3.0],
+            "cache_hits_total": 100,
+            "ai_calls_total": 90,
+            "ghl_calls_total": 80,
+        }
+        mock_performance_tracker.get_response_time_distribution.return_value = expected_distribution
+
+        with patch.object(metrics_service, 'cache_service', mock_cache_service), \
+             patch.object(metrics_service, 'performance_tracker', mock_performance_tracker):
+            result = await metrics_service.get_response_time_distribution()
+
+            mock_performance_tracker.get_response_time_distribution.assert_called_once()
+            mock_cache_service.set.assert_called_once()
+            call_args = mock_cache_service.set.call_args
+            assert call_args[0][0] == "metrics:dashboard:response_distribution"
+            assert call_args[1]['ttl'] == 30
+            assert result == expected_distribution
 
     @pytest.mark.asyncio
     async def test_get_budget_distribution_success(self, metrics_service, mock_cache_service):

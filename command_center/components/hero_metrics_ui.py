@@ -13,6 +13,7 @@ Created: 2026-01-23
 """
 import html
 import os
+import re
 from typing import List
 
 import streamlit as st
@@ -27,20 +28,48 @@ class HeroMetricsUI:
     def __init__(self):
         self.metrics_component = create_enhanced_hero_metrics()
 
-    @staticmethod
-    def _is_light_mode() -> bool:
-        toggle_state = st.session_state.get("sidebar_theme_toggle")
-        if isinstance(toggle_state, bool):
-            return toggle_state
+    def _apply_overview_action_button_css(self) -> None:
+        """Apply deterministic styling for overview action buttons."""
+        key_selectors = """
+            div.st-key-refresh_hero_metrics button,
+            div.st-key-quick_action_generate_cmas button,
+            div.st-key-quick_action_send_followups button,
+            div.st-key-quick_action_book_appointments button,
+            div.st-key-quick_action_performance_report button,
+            .st-key-refresh_hero_metrics button,
+            .st-key-quick_action_generate_cmas button,
+            .st-key-quick_action_send_followups button,
+            .st-key-quick_action_book_appointments button,
+            .st-key-quick_action_performance_report button
+        """
 
-        theme_value = str(st.session_state.get("ui_theme", "")).strip().lower()
-        if theme_value in {"dark", "light"}:
-            return theme_value == "light"
+        st.markdown(
+            f"""
+            <style>
+            {key_selectors} {{
+                background: var(--lyrio-main-btn-bg, #ffffff) !important;
+                color: var(--lyrio-main-btn-text, #1f2937) !important;
+                -webkit-text-fill-color: var(--lyrio-main-btn-text, #1f2937) !important;
+                border: 1px solid var(--lyrio-main-btn-border, #cbd5e1) !important;
+                border-radius: 16px !important;
+                box-shadow: var(--lyrio-main-btn-shadow, 0 1px 2px rgba(15, 23, 42, 0.08)) !important;
+                font-weight: 500 !important;
+                min-height: 46px !important;
+                opacity: 1 !important;
+            }}
 
-        query_theme = st.query_params.get("theme")
-        if isinstance(query_theme, list):
-            query_theme = query_theme[0] if query_theme else None
-        return str(query_theme or "").strip().lower() == "light"
+            {key_selectors}:hover,
+            {key_selectors}:focus-visible {{
+                background: var(--lyrio-main-btn-hover-bg, #eff6ff) !important;
+                color: var(--lyrio-main-btn-hover-text, #1e3a8a) !important;
+                -webkit-text-fill-color: var(--lyrio-main-btn-hover-text, #1e3a8a) !important;
+                border-color: var(--lyrio-main-btn-hover-border, #93c5fd) !important;
+                box-shadow: var(--lyrio-main-btn-shadow, 0 1px 2px rgba(15, 23, 42, 0.08)) !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
     def render_hero_metrics_section(self, location_id: str) -> None:
         """
@@ -49,43 +78,7 @@ class HeroMetricsUI:
         Args:
             location_id: GHL location ID for data filtering
         """
-        # Theme-consistent styling for ROI action controls.
-        st.markdown(
-            """
-            <style>
-            .st-key-refresh_hero_metrics button,
-            .st-key-quick_action_generate_cmas button,
-            .st-key-quick_action_send_followups button,
-            .st-key-quick_action_book_appointments button,
-            .st-key-quick_action_performance_report button {
-                background: #0f172a !important;
-                color: #cbd5e1 !important;
-                -webkit-text-fill-color: #cbd5e1 !important;
-                border: 1px solid #243449 !important;
-                border-radius: 10px !important;
-                box-shadow: none !important;
-                opacity: 1 !important;
-            }
-
-            .st-key-refresh_hero_metrics button:hover,
-            .st-key-refresh_hero_metrics button:focus-visible,
-            .st-key-quick_action_generate_cmas button:hover,
-            .st-key-quick_action_generate_cmas button:focus-visible,
-            .st-key-quick_action_send_followups button:hover,
-            .st-key-quick_action_send_followups button:focus-visible,
-            .st-key-quick_action_book_appointments button:hover,
-            .st-key-quick_action_book_appointments button:focus-visible,
-            .st-key-quick_action_performance_report button:hover,
-            .st-key-quick_action_performance_report button:focus-visible {
-                background: #172235 !important;
-                color: #e2e8f0 !important;
-                -webkit-text-fill-color: #e2e8f0 !important;
-                border-color: #324b68 !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
+        self._apply_overview_action_button_css()
 
         # Section header with refresh control
         roi_title = html.escape((os.getenv("DASHBOARD_ROI_TITLE") or "ROI Command Center").strip() or "ROI Command Center")
@@ -289,16 +282,11 @@ class HeroMetricsUI:
     def _render_action_buttons_section(self, metrics_data: List[HeroMetricData]) -> None:
         """Render quick action buttons section"""
 
-        # Check if we have metrics that support automation
-        automation_metrics = [
-            m for m in metrics_data
-            if m.action_button and ("CMA" in m.label or "Hot Leads" in m.label)
-        ]
-        # Keep quick action controls on the same dark-styled treatment in both themes.
-        action_button_type = "secondary"
+        # Always show quick actions so layout remains stable even with zero live data.
+        hot_lead_count = self._metric_value_count(metrics_data, "Hot Leads Pipeline")
+        q4_seller_count = self._metric_value_count(metrics_data, "Q4 CMAs Ready")
 
-        if not automation_metrics:
-            return
+        action_button_type = "secondary"
 
         st.markdown("---")
         st.markdown("### Quick Actions")
@@ -313,7 +301,10 @@ class HeroMetricsUI:
                 key="quick_action_generate_cmas",
                 type=action_button_type,
             ):
-                self._trigger_cma_automation()
+                if q4_seller_count <= 0:
+                    st.info("No Q4 sellers are ready yet. This will enable automatically when seller data arrives.")
+                else:
+                    self._trigger_cma_automation()
 
         with col2:
             if st.button(
@@ -323,7 +314,10 @@ class HeroMetricsUI:
                 key="quick_action_send_followups",
                 type=action_button_type,
             ):
-                self._trigger_followup_automation()
+                if hot_lead_count <= 0:
+                    st.info("No hot leads available yet. This will enable automatically when lead activity increases.")
+                else:
+                    self._trigger_followup_automation()
 
         with col3:
             if st.button(
@@ -333,7 +327,10 @@ class HeroMetricsUI:
                 key="quick_action_book_appointments",
                 type=action_button_type,
             ):
-                self._trigger_appointment_automation()
+                if hot_lead_count <= 0:
+                    st.info("No hot leads to book yet. This will enable automatically when qualified leads arrive.")
+                else:
+                    self._trigger_appointment_automation()
 
         with col4:
             if st.button(
@@ -344,6 +341,24 @@ class HeroMetricsUI:
                 type=action_button_type,
             ):
                 self._generate_performance_report()
+
+        if hot_lead_count <= 0 and q4_seller_count <= 0:
+            st.caption("Quick actions stay available; data-dependent actions will prompt until live lead/seller data arrives.")
+
+    @staticmethod
+    def _metric_value_count(metrics_data: List[HeroMetricData], label: str) -> int:
+        """Extract leading integer count from a metric card value (e.g., '4 leads')."""
+        for metric in metrics_data:
+            if metric.label != label:
+                continue
+            match = re.search(r"\d+", str(metric.value))
+            if match:
+                try:
+                    return int(match.group(0))
+                except Exception:
+                    return 0
+            return 0
+        return 0
 
     def _render_loading_state(self) -> None:
         """Render loading state with skeleton cards"""

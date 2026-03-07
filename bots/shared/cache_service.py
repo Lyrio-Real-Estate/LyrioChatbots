@@ -370,6 +370,12 @@ class CacheService:
         Critical for <500ms lead analysis performance.
         """
         import asyncio
+        try:
+            # Local import avoids circular dependency at module import time.
+            from bots.shared.performance_tracker import get_performance_tracker
+            performance_tracker = get_performance_tracker()
+        except Exception:
+            performance_tracker = None
 
         start_time = time.time()
 
@@ -390,6 +396,15 @@ class CacheService:
             except Exception as e:
                 logger.warning(f"Failed to publish cache hit event: {e}")
 
+            if performance_tracker is not None:
+                try:
+                    await performance_tracker.record_cache_hit(
+                        response_time_ms=elapsed_ms,
+                        data_size_bytes=len(str(cached_result)) if cached_result else 0,
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record cache hit metric: {e}")
+
             return cached_result
 
         # Compute result
@@ -403,6 +418,11 @@ class CacheService:
             )
         except Exception as e:
             logger.warning(f"Failed to publish cache miss event: {e}")
+        if performance_tracker is not None:
+            try:
+                await performance_tracker.record_cache_miss(cache_key=key[:100])
+            except Exception as e:
+                logger.debug(f"Failed to record cache miss metric: {e}")
         compute_start = time.time()
 
         try:

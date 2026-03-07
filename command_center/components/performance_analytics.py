@@ -10,6 +10,7 @@ Displays comprehensive performance metrics including:
 
 Features real-time updates and interactive visualizations.
 """
+import html
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -18,7 +19,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from bots.shared.logger import get_logger
-from bots.shared.metrics_service import get_metrics_service
+from bots.shared.dashboard_data_service import get_dashboard_data_service
 from command_center.async_runtime import run_async
 
 logger = get_logger(__name__)
@@ -38,8 +39,143 @@ class PerformanceAnalyticsComponent:
 
     def __init__(self):
         """Initialize performance analytics component."""
-        self.metrics_service = get_metrics_service()
+        self.dashboard_service = get_dashboard_data_service()
         logger.info("PerformanceAnalyticsComponent initialized")
+
+    @staticmethod
+    def _is_light_mode() -> bool:
+        """Resolve current UI mode from session/query state."""
+        toggle_state = st.session_state.get("sidebar_theme_toggle")
+        if isinstance(toggle_state, bool):
+            return toggle_state
+
+        theme_value = str(st.session_state.get("ui_theme", "")).strip().lower()
+        if theme_value in {"dark", "light"}:
+            return theme_value == "light"
+
+        query_theme = st.query_params.get("theme")
+        if isinstance(query_theme, list):
+            query_theme = query_theme[0] if query_theme else None
+        return str(query_theme or "").strip().lower() == "light"
+
+    def _chart_palette(self) -> Dict[str, str]:
+        """Return chart palette aligned to current UI mode."""
+        if self._is_light_mode():
+            return {
+                "template": "plotly_white",
+                "paper_bg": "#ffffff",
+                "plot_bg": "#f8fafc",
+                "font": "#334155",
+                "grid": "#dbe3ee",
+                "axis": "#cbd5e1",
+                "legend_bg": "rgba(255,255,255,0.72)",
+            }
+        return {
+            "template": "plotly_dark",
+            "paper_bg": "#050c18",
+            "plot_bg": "#0b1220",
+            "font": "#cbd5e1",
+            "grid": "#243449",
+            "axis": "#32445d",
+            "legend_bg": "rgba(5,12,24,0.45)",
+        }
+
+    def _apply_chart_theme(self, fig: go.Figure, **layout_kwargs: Any) -> None:
+        """Apply consistent chart styling for light/dark mode."""
+        palette = self._chart_palette()
+        fig.update_layout(
+            template=palette["template"],
+            paper_bgcolor=palette["paper_bg"],
+            plot_bgcolor=palette["plot_bg"],
+            font={"color": palette["font"]},
+            legend={
+                "bgcolor": palette["legend_bg"],
+                "font": {"color": palette["font"]},
+            },
+            **layout_kwargs,
+        )
+        fig.update_xaxes(
+            gridcolor=palette["grid"],
+            linecolor=palette["axis"],
+            zerolinecolor=palette["grid"],
+            tickfont={"color": palette["font"]},
+            title_font={"color": palette["font"]},
+        )
+        fig.update_yaxes(
+            gridcolor=palette["grid"],
+            linecolor=palette["axis"],
+            zerolinecolor=palette["grid"],
+            tickfont={"color": palette["font"]},
+            title_font={"color": palette["font"]},
+        )
+
+    def _render_theme_table(self, df: pd.DataFrame) -> None:
+        """Render a theme-aware table so light mode does not inherit dark Streamlit DataFrame skin."""
+        if df.empty:
+            st.info("No data available")
+            return
+
+        is_light = self._is_light_mode()
+        table_bg = "#ffffff" if is_light else "#0b1220"
+        header_bg = "#f8fafc" if is_light else "#121a28"
+        text_color = "#334155" if is_light else "#dbe5f3"
+        border_color = "#dbe3ee" if is_light else "#233246"
+        row_alt = "#f8fafc" if is_light else "#0f1724"
+
+        header_cells = "".join(f"<th>{html.escape(str(col))}</th>" for col in df.columns)
+        body_rows = []
+        for row in df.itertuples(index=False):
+            cells = "".join(f"<td>{html.escape(str(val))}</td>" for val in row)
+            body_rows.append(f"<tr>{cells}</tr>")
+        body_html = "".join(body_rows)
+
+        st.markdown(
+            f"""
+            <style>
+            .lyrio-theme-table-wrap {{
+                overflow-x: auto;
+            }}
+            .lyrio-theme-table {{
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 0;
+                background: {table_bg};
+                border: 1px solid {border_color};
+                border-radius: 12px;
+                overflow: hidden;
+                color: {text_color};
+            }}
+            .lyrio-theme-table th {{
+                background: {header_bg};
+                color: {text_color};
+                font-weight: 600;
+                font-size: 0.92rem;
+                text-align: left;
+                padding: 10px 12px;
+                border-bottom: 1px solid {border_color};
+            }}
+            .lyrio-theme-table td {{
+                color: {text_color};
+                font-size: 0.92rem;
+                padding: 10px 12px;
+                border-bottom: 1px solid {border_color};
+            }}
+            .lyrio-theme-table tr:nth-child(even) td {{
+                background: {row_alt};
+            }}
+            .lyrio-theme-table tr:last-child td {{
+                border-bottom: none;
+            }}
+            </style>
+            <div class="lyrio-theme-table-wrap">
+                <table class="lyrio-theme-table">
+                    <thead><tr>{header_cells}</tr></thead>
+                    <tbody>{body_html}</tbody>
+                </table>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     def render(self) -> None:
         """
@@ -82,7 +218,7 @@ class PerformanceAnalyticsComponent:
         """Fetch all performance analytics data."""
         try:
             performance_data = run_async(
-                self.metrics_service.get_performance_analytics_data()
+                self.dashboard_service.get_performance_analytics_data()
             )
             return performance_data
 
@@ -152,7 +288,7 @@ class PerformanceAnalyticsComponent:
                 {"Metric": "P95 Response", "Value": f"{metrics['cache_p95_ms']:.1f}ms", "Target": "<100ms"},
                 {"Metric": "Total Hits", "Value": f"{metrics['total_cache_hits']:,}", "Target": "-"},
             ])
-            st.dataframe(cache_df, hide_index=True, use_container_width=True)
+            self._render_theme_table(cache_df)
 
         with col2:
             st.write("**AI Performance**")
@@ -162,10 +298,10 @@ class PerformanceAnalyticsComponent:
                 {"Metric": "Total Calls", "Value": f"{metrics['ai_total_calls']:,}", "Target": "-"},
                 {"Metric": "Fallback Rate", "Value": f"{(metrics['fallback_activations'] / max(metrics['ai_total_calls'], 1)) * 100:.1f}%", "Target": "<5%"},
             ])
-            st.dataframe(ai_df, hide_index=True, use_container_width=True)
+            self._render_theme_table(ai_df)
 
-        # Performance distribution chart
-        self._render_response_time_distribution(metrics)
+        # Live response-time distribution chart
+        self._render_response_time_distribution(performance_data.get("response_time_distribution"))
 
     def _render_cache_analytics(self, performance_data: Dict[str, Any]) -> None:
         """Render detailed cache analytics."""
@@ -191,7 +327,7 @@ class PerformanceAnalyticsComponent:
                 {"Metric": "Total Requests", "Value": f"{cache_stats['total_requests']:,}"},
                 {"Metric": "Cache Size", "Value": f"{cache_stats['cache_size_mb']:.1f} MB"},
             ])
-            st.dataframe(efficiency_df, hide_index=True, use_container_width=True)
+            self._render_theme_table(efficiency_df)
 
         with col2:
             # Cache response times comparison
@@ -253,16 +389,46 @@ class PerformanceAnalyticsComponent:
         else:
             st.info("Historical trend data not yet available. Trends will appear after 24+ hours of operation.")
 
-    def _render_response_time_distribution(self, metrics: Dict[str, Any]) -> None:
-        """Render response time distribution chart."""
-        # Create mock distribution data for visualization
+    def _render_response_time_distribution(self, response_distribution: Optional[Dict[str, Any]]) -> None:
+        """Render live response time distribution chart."""
+        labels = [
+            "0-100ms",
+            "100-200ms",
+            "200-400ms",
+            "400-800ms",
+            "800-1.2s",
+            "1.2-2s",
+            "2-4s",
+            "4-8s",
+            "8s+",
+        ]
+
+        dist = response_distribution or {}
+        time_bins = dist.get("labels") or labels
+        bucket_len = len(time_bins)
+
+        def _normalize(values: Any) -> List[float]:
+            if not isinstance(values, list):
+                return [0.0] * bucket_len
+            normalized = []
+            for value in values[:bucket_len]:
+                try:
+                    normalized.append(float(value))
+                except Exception:
+                    normalized.append(0.0)
+            if len(normalized) < bucket_len:
+                normalized.extend([0.0] * (bucket_len - len(normalized)))
+            return normalized
+
         response_times = {
-            'Cache Hits': [5, 10, 15, 12, 8, 6, 4, 2, 1],
-            'AI Calls': [2, 4, 8, 15, 20, 18, 12, 8, 5],
-            'GHL API': [3, 7, 12, 18, 15, 10, 8, 4, 2]
+            "Cache Hits": _normalize(dist.get("cache_hits_pct")),
+            "AI Calls": _normalize(dist.get("ai_calls_pct")),
+            "GHL API": _normalize(dist.get("ghl_calls_pct")),
         }
 
-        time_bins = ['0-100ms', '100-200ms', '200-400ms', '400-800ms', '800-1.2s', '1.2-2s', '2-4s', '4-8s', '8s+']
+        has_live_values = any(any(float(v or 0) > 0 for v in values) for values in response_times.values())
+        if not has_live_values:
+            st.caption("No live latency events recorded yet. Distribution will populate as cache/AI/GHL calls occur.")
 
         fig = go.Figure()
 
@@ -275,16 +441,16 @@ class PerformanceAnalyticsComponent:
                 textposition="auto"
             ))
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             title="Response Time Distribution",
             xaxis_title="Response Time Range",
             yaxis_title="Percentage of Requests",
             barmode='group',
             height=400,
-            template="plotly_white"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
     def _render_cache_hit_rate_trend(self, cache_stats: Dict[str, Any]) -> None:
         """Render cache hit rate trend over time."""
@@ -307,12 +473,12 @@ class PerformanceAnalyticsComponent:
 
         fig.add_hline(y=80, line_dash="dash", line_color="red", annotation_text="Target: 80%")
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=300,
-            template="plotly_white"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
     def _render_cache_response_comparison(self, cache_stats: Dict[str, Any]) -> None:
         """Render cache vs miss response time comparison."""
@@ -331,9 +497,9 @@ class PerformanceAnalyticsComponent:
         )
 
         fig.update_traces(texttemplate='%{text:.0f}ms', textposition='outside')
-        fig.update_layout(height=300, template="plotly_white", showlegend=False)
+        self._apply_chart_theme(fig, height=300, showlegend=False)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
     def _render_cost_savings_breakdown(self, cost_savings: Dict[str, Any]) -> None:
         """Render cost savings breakdown chart."""
@@ -351,9 +517,9 @@ class PerformanceAnalyticsComponent:
         )
 
         fig.update_traces(textposition='inside', textinfo='percent+label')
-        fig.update_layout(height=300, template="plotly_white")
+        self._apply_chart_theme(fig, height=300)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
     def _render_monthly_savings_projection(self, cost_savings: Dict[str, Any]) -> None:
         """Render monthly cost savings projection."""
@@ -383,8 +549,8 @@ class PerformanceAnalyticsComponent:
             markers=True
         )
 
-        fig.update_layout(height=300, template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
+        self._apply_chart_theme(fig, height=300)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
     def _render_performance_trend_chart(self, trend_data: List[Dict[str, Any]]) -> None:
         """Render performance trend chart."""
@@ -410,16 +576,16 @@ class PerformanceAnalyticsComponent:
             yaxis='y2'
         ))
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             title="Performance Trends (Last 7 Days)",
             xaxis_title="Date",
             yaxis=dict(title="Cache Hit Rate (%)", side="left"),
             yaxis2=dict(title="AI Response Time (ms)", side="right", overlaying="y"),
             height=400,
-            template="plotly_white"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
     def _render_performance_predictions(self, trend_data: List[Dict[str, Any]]) -> None:
         """Render performance predictions."""

@@ -8,7 +8,9 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import streamlit as st
 
+from bots.shared.dashboard_data_service import DashboardDataService
 from bots.shared.dashboard_models import PerformanceMetrics
+from command_center.async_runtime import run_async
 
 
 def _current_theme_mode() -> str:
@@ -31,6 +33,34 @@ def _current_theme_mode() -> str:
     return "dark"
 
 
+def _format_target_delta(value: float, summary_has_data: bool) -> str:
+    """
+    Format KPI delta against a 100% target.
+
+    When all summary values are zero (typical no-data fallback), display a neutral
+    0.0% delta instead of a misleading -100.0%.
+    """
+    if not summary_has_data and float(value or 0.0) <= 0.0:
+        return "0.0%"
+    return f"{(float(value or 0.0) - 1.0) * 100:+.1f}%"
+
+
+@st.cache_data(ttl=60)
+def _load_hourly_performance_trends(hours: int = 24, location_id: str = "") -> dict:
+    """Load real hourly trend data from dashboard service."""
+    try:
+        service = DashboardDataService()
+        trends = run_async(
+            service.get_hourly_performance_trends(
+                hours=hours,
+                location_id=(location_id or "").strip() or None,
+            )
+        )
+        return trends if isinstance(trends, dict) else {}
+    except Exception:
+        return {}
+
+
 def render_performance_chart(performance: PerformanceMetrics) -> None:
     """
     Render performance analytics chart.
@@ -40,15 +70,31 @@ def render_performance_chart(performance: PerformanceMetrics) -> None:
     """
     st.subheader("Performance Analytics (24h)")
 
-    # Generate hourly time series for last 24 hours
-    now = datetime.now()
-    hours = [now - timedelta(hours=i) for i in range(24, 0, -1)]
-    hour_labels = [h.strftime("%H:%M") for h in hours]
+    # Load true hourly series from DB-backed dashboard service.
+    location_id = str(
+        st.session_state.get("oauth_location_id")
+        or st.session_state.get("location_id")
+        or ""
+    ).strip()
+    hourly_trends = _load_hourly_performance_trends(hours=24, location_id=location_id)
+    hour_labels = hourly_trends.get("labels") if isinstance(hourly_trends, dict) else None
+    qual_rates = hourly_trends.get("qualification_rate_pct") if isinstance(hourly_trends, dict) else None
+    response_times = hourly_trends.get("avg_response_time_min") if isinstance(hourly_trends, dict) else None
 
-    # Mock time-series data (in production, this comes from PerformanceTracker)
-    # For now, use current metrics as baseline
-    qual_rates = [performance.qualification_rate + (i - 12) * 0.02 for i in range(24)]
-    response_times = [performance.avg_response_time + (i - 12) * 0.5 for i in range(24)]
+    if not isinstance(hour_labels, list) or not hour_labels:
+        now = datetime.now()
+        fallback_hours = [now - timedelta(hours=i) for i in range(24, 0, -1)]
+        hour_labels = [h.strftime("%H:%M") for h in fallback_hours]
+
+    if not isinstance(qual_rates, list) or len(qual_rates) != len(hour_labels):
+        qual_rates = [round(performance.qualification_rate * 100.0, 2) for _ in hour_labels]
+    else:
+        qual_rates = [round(float(value or 0.0), 2) for value in qual_rates]
+
+    if not isinstance(response_times, list) or len(response_times) != len(hour_labels):
+        response_times = [round(float(performance.avg_response_time or 0.0), 2) for _ in hour_labels]
+    else:
+        response_times = [round(float(value or 0.0), 2) for value in response_times]
 
     theme_mode = _current_theme_mode()
     is_light = theme_mode == "light"
@@ -59,7 +105,7 @@ def render_performance_chart(performance: PerformanceMetrics) -> None:
     # Qualification rate (left y-axis)
     fig.add_trace(go.Scatter(
         x=hour_labels,
-        y=[r * 100 for r in qual_rates],  # Convert to percentage
+        y=qual_rates,
         name="Qualification Rate",
         mode='lines+markers',
         line=dict(color='#2E7D32', width=2),
@@ -141,24 +187,32 @@ def render_performance_chart(performance: PerformanceMetrics) -> None:
 
     # Summary metrics below chart
     col1, col2, col3 = st.columns(3)
+    summary_has_data = any(
+        float(metric or 0.0) > 0.0
+        for metric in (
+            performance.budget_performance,
+            performance.timeline_performance,
+            performance.commission_performance,
+        )
+    )
 
     with col1:
         st.metric(
             "Budget Performance",
             f"{performance.budget_performance * 100:.1f}%",
-            delta=f"{(performance.budget_performance - 1) * 100:+.1f}%"
+            delta=_format_target_delta(performance.budget_performance, summary_has_data),
         )
 
     with col2:
         st.metric(
             "Timeline Performance",
             f"{performance.timeline_performance * 100:.1f}%",
-            delta=f"{(performance.timeline_performance - 1) * 100:+.1f}%"
+            delta=_format_target_delta(performance.timeline_performance, summary_has_data),
         )
 
     with col3:
         st.metric(
             "Commission Performance",
             f"{performance.commission_performance * 100:.1f}%",
-            delta=f"{(performance.commission_performance - 1) * 100:+.1f}%"
+            delta=_format_target_delta(performance.commission_performance, summary_has_data),
         )

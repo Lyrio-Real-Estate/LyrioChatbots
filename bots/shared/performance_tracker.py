@@ -71,6 +71,20 @@ class PerformanceTracker:
 
         logger.info(f"PerformanceTracker initialized (window: {window_hours}h)")
 
+    # Response-time distribution buckets used by dashboard charts.
+    _RESPONSE_BUCKET_LABELS = [
+        "0-100ms",
+        "100-200ms",
+        "200-400ms",
+        "400-800ms",
+        "800-1.2s",
+        "1.2-2s",
+        "2-4s",
+        "4-8s",
+        "8s+",
+    ]
+    _RESPONSE_BUCKET_UPPER_BOUNDS_MS = [100, 200, 400, 800, 1200, 2000, 4000, 8000]
+
     # =================================================================
     # Event Recording Methods
     # =================================================================
@@ -171,6 +185,44 @@ class PerformanceTracker:
             return 0.0
         return (numerator / denominator) * 100
 
+    def _bucket_index_for_latency(self, latency_ms: float) -> int:
+        """Map latency in milliseconds to configured response-time bucket index."""
+        for idx, upper in enumerate(self._RESPONSE_BUCKET_UPPER_BOUNDS_MS):
+            if latency_ms < upper:
+                return idx
+        return len(self._RESPONSE_BUCKET_LABELS) - 1
+
+    def _build_latency_distribution(self, events: deque) -> Dict[str, Any]:
+        """
+        Build percentage distribution for response-time buckets from event deque.
+
+        Returns:
+            Dict with `percentages` list (len 9) and `total_events` count.
+        """
+        counts = [0] * len(self._RESPONSE_BUCKET_LABELS)
+        total_events = 0
+
+        for event in events:
+            raw_latency = event.get("response_time_ms")
+            if raw_latency is None:
+                continue
+            try:
+                latency_ms = float(raw_latency)
+            except Exception:
+                continue
+            if latency_ms < 0:
+                continue
+
+            bucket_idx = self._bucket_index_for_latency(latency_ms)
+            counts[bucket_idx] += 1
+            total_events += 1
+
+        if total_events <= 0:
+            return {"percentages": [0.0] * len(self._RESPONSE_BUCKET_LABELS), "total_events": 0}
+
+        percentages = [round((count / total_events) * 100.0, 1) for count in counts]
+        return {"percentages": percentages, "total_events": total_events}
+
     async def get_performance_metrics(self) -> PerformanceDashboardMetrics:
         """
         Get aggregated performance metrics for dashboard.
@@ -236,6 +288,52 @@ class PerformanceTracker:
         )
 
         return metrics
+
+    async def get_response_time_distribution(self) -> Dict[str, Any]:
+        """
+        Get live response-time distribution across Cache, AI, and GHL calls.
+
+        Returns:
+            Dict with shared labels and per-service percentage series.
+
+        Cache TTL: 30 seconds (matches performance metrics freshness).
+        """
+        cache_key = "metrics:performance:response_distribution"
+        try:
+            cached = await self.cache_service.get(cache_key)
+            if cached:
+                return cached
+
+            cache_dist = self._build_latency_distribution(self._cache_hits)
+            ai_dist = self._build_latency_distribution(self._ai_calls)
+            ghl_dist = self._build_latency_distribution(self._ghl_calls)
+
+            distribution = {
+                "labels": list(self._RESPONSE_BUCKET_LABELS),
+                "cache_hits_pct": cache_dist["percentages"],
+                "ai_calls_pct": ai_dist["percentages"],
+                "ghl_calls_pct": ghl_dist["percentages"],
+                "cache_hits_total": cache_dist["total_events"],
+                "ai_calls_total": ai_dist["total_events"],
+                "ghl_calls_total": ghl_dist["total_events"],
+                "generated_at": datetime.now().isoformat(),
+            }
+
+            await self.cache_service.set(cache_key, distribution, ttl=30)
+            return distribution
+        except Exception as e:
+            logger.exception(f"Error building response-time distribution: {e}")
+            return {
+                "labels": list(self._RESPONSE_BUCKET_LABELS),
+                "cache_hits_pct": [0.0] * len(self._RESPONSE_BUCKET_LABELS),
+                "ai_calls_pct": [0.0] * len(self._RESPONSE_BUCKET_LABELS),
+                "ghl_calls_pct": [0.0] * len(self._RESPONSE_BUCKET_LABELS),
+                "cache_hits_total": 0,
+                "ai_calls_total": 0,
+                "ghl_calls_total": 0,
+                "generated_at": datetime.now().isoformat(),
+                "error": "Response-time distribution temporarily unavailable",
+            }
 
     async def get_cache_statistics(self) -> CacheStatistics:
         """

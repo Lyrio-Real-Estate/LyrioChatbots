@@ -42,6 +42,7 @@ class TestDashboardDataService:
         mock.get_performance_metrics = AsyncMock()
         mock.get_cache_statistics = AsyncMock()
         mock.get_cost_savings = AsyncMock()
+        mock.get_response_time_distribution = AsyncMock()
         return mock
 
     @pytest.mark.asyncio
@@ -290,6 +291,15 @@ class TestDashboardDataService:
             cache_hits=1700, avg_cost_per_ai_call=0.05, lead_bot_savings=85.0,
             seller_bot_savings=15.0
         )
+        mock_metrics_service.get_response_time_distribution.return_value = {
+            "labels": ["0-100ms", "100-200ms", "200-400ms", "400-800ms", "800-1.2s", "1.2-2s", "2-4s", "4-8s", "8s+"],
+            "cache_hits_pct": [10.0, 20.0, 30.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "ai_calls_pct": [0.0, 10.0, 25.0, 30.0, 20.0, 10.0, 5.0, 0.0, 0.0],
+            "ghl_calls_pct": [5.0, 15.0, 20.0, 25.0, 15.0, 10.0, 5.0, 3.0, 2.0],
+            "cache_hits_total": 100,
+            "ai_calls_total": 50,
+            "ghl_calls_total": 75,
+        }
 
         with patch.object(dashboard_service, 'cache_service', mock_cache_service), \
              patch.object(dashboard_service, 'metrics_service', mock_metrics_service):
@@ -300,6 +310,7 @@ class TestDashboardDataService:
             mock_metrics_service.get_performance_metrics.assert_called_once()
             mock_metrics_service.get_cache_statistics.assert_called_once()
             mock_metrics_service.get_cost_savings.assert_called_once()
+            mock_metrics_service.get_response_time_distribution.assert_called_once()
 
             # Verify cache set with 1 min TTL
             mock_cache_service.set.assert_called_once()
@@ -311,6 +322,7 @@ class TestDashboardDataService:
             assert 'performance_metrics' in result
             assert 'cache_statistics' in result
             assert 'cost_savings' in result
+            assert 'response_time_distribution' in result
 
     @pytest.mark.asyncio
     async def test_conversation_filters_all_fields(self, dashboard_service, mock_cache_service):

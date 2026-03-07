@@ -41,6 +41,18 @@ class CommissionTrackingComponent:
         self.metrics_service = get_metrics_service()
         logger.info("CommissionTrackingComponent initialized")
 
+    @staticmethod
+    def _safe_ratio(numerator: float, denominator: float) -> float:
+        """Return numerator/denominator with zero-denominator protection."""
+        if denominator in (0, 0.0):
+            return 0.0
+        return numerator / denominator
+
+    @classmethod
+    def _safe_percent(cls, numerator: float, denominator: float) -> float:
+        """Return percentage with zero-denominator protection."""
+        return cls._safe_ratio(numerator, denominator) * 100.0
+
     def render(self) -> None:
         """
         Render the complete commission tracking component.
@@ -265,13 +277,18 @@ class CommissionTrackingComponent:
 
         # Calculate pipeline health metrics
         total_leads = 247  # Mock data
-        qualified_rate = (commission_data['total_qualified_leads'] / total_leads) * 100
-        hot_lead_rate = (commission_data['hot_leads_count'] / commission_data['total_qualified_leads']) * 100
+        total_qualified = float(commission_data.get('total_qualified_leads', 0) or 0)
+        hot_leads = float(commission_data.get('hot_leads_count', 0) or 0)
+        total_commission = float(commission_data.get('total_commission_potential', 0) or 0)
+
+        qualified_rate = self._safe_percent(total_qualified, float(total_leads))
+        hot_lead_rate = self._safe_percent(hot_leads, total_qualified)
+        avg_commission_per_lead = self._safe_ratio(total_commission, total_qualified)
 
         stats_df = pd.DataFrame([
             {"Metric": "Qualification Rate", "Value": f"{qualified_rate:.1f}%"},
             {"Metric": "Hot Lead Rate", "Value": f"{hot_lead_rate:.1f}%"},
-            {"Metric": "Avg Commission/Lead", "Value": f"${commission_data['total_commission_potential'] / commission_data['total_qualified_leads']:,.0f}"},
+            {"Metric": "Avg Commission/Lead", "Value": f"${avg_commission_per_lead:,.0f}"},
             {"Metric": "Pipeline Velocity", "Value": "12.5 days"},
         ])
 
@@ -447,24 +464,39 @@ class CommissionTrackingComponent:
         latest = commission_trend[-1]
         previous = commission_trend[-2]
 
-        commission_growth = ((latest['amount'] - previous['amount']) / previous['amount']) * 100
-        deal_growth = ((latest['deals'] - previous['deals']) / previous['deals']) * 100
+        latest_amount = float(latest.get('amount', 0) or 0)
+        previous_amount = float(previous.get('amount', 0) or 0)
+        latest_deals = float(latest.get('deals', 0) or 0)
+        previous_deals = float(previous.get('deals', 0) or 0)
+
+        commission_growth = self._safe_percent(latest_amount - previous_amount, previous_amount)
+        deal_growth = self._safe_percent(latest_deals - previous_deals, previous_deals)
+        commission_growth_label = f"{commission_growth:+.1f}%"
+        deal_growth_label = f"{deal_growth:+.1f}%"
+
+        if previous_amount <= 0:
+            commission_growth_label = "N/A"
+        if previous_deals <= 0:
+            deal_growth_label = "N/A"
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.metric(
                 "Commission Growth",
-                f"{commission_growth:+.1f}%",
-                delta=f"${latest['amount'] - previous['amount']:,.0f}"
+                commission_growth_label,
+                delta=f"${latest_amount - previous_amount:,.0f}"
             )
 
         with col2:
             st.metric(
                 "Deal Count Growth",
-                f"{deal_growth:+.1f}%",
-                delta=f"{latest['deals'] - previous['deals']:+d} deals"
+                deal_growth_label,
+                delta=f"{int(latest_deals - previous_deals):+d} deals"
             )
+
+        if previous_amount <= 0 or previous_deals <= 0:
+            st.caption("Growth % is shown as N/A when prior-month baseline is zero.")
 
     def _render_deal_velocity(self, commission_data: Dict[str, Any]) -> None:
         """Render deal velocity metrics."""

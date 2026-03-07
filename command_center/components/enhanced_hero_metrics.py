@@ -20,9 +20,16 @@ from typing import Any, Dict, List, Optional
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from sqlalchemy import select
+
+from bots.shared.business_rules import JorgeBusinessRules
 from bots.shared.cache_service import MemoryCache
+from bots.shared.dashboard_data_service import DashboardDataService
 from bots.shared.ghl_client import GHLClient
 from bots.shared.logger import get_logger
+from bots.shared.metrics_service import get_metrics_service
+from database.models import ContactModel, ConversationModel, DealModel, LeadModel
+from database.session import AsyncSessionFactory
 
 logger = get_logger(__name__)
 
@@ -213,25 +220,49 @@ class RevenueForecaster:
         return velocity
 
     def _calculate_pipeline_value(self, pipeline: List[Dict]) -> float:
-        """Calculate expected value from current pipeline"""
+        """Calculate expected value from current pipeline for the next 30 days."""
         total_value = 0.0
+        now = datetime.utcnow()
+        window_end = now + timedelta(days=30)
 
         for lead in pipeline:
-            commission = lead.get("commission", 0)
-            probability = lead.get("probability", 0.5)
+            commission = float(lead.get("commission", 0) or 0.0)
+            probability = float(lead.get("probability", 0.5) or 0.5)
+            probability = max(0.0, min(1.0, probability))
+            if commission <= 0:
+                continue
 
-            # Check if likely to close in next 30 days
-            close_date = lead.get("close_date")
-            if close_date:
-                try:
-                    # Simple date parsing - in production would use proper parsing
-                    if "2026-02" in str(close_date):  # Next month
-                        total_value += commission * probability
-                except:
-                    # Fallback: assume 50% chance to close in 30 days
-                    total_value += commission * 0.5
+            close_date = self._parse_close_date(lead.get("close_date"))
+            if close_date is None:
+                window_weight = 0.7
+            elif close_date <= window_end:
+                window_weight = 1.0
+            else:
+                window_weight = 0.25
+
+            total_value += commission * probability * window_weight
 
         return total_value
+
+    @staticmethod
+    def _parse_close_date(value: Any) -> Optional[datetime]:
+        """Parse close date values from datetime/ISO strings."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            if raw.endswith("Z"):
+                raw = f"{raw[:-1]}+00:00"
+            try:
+                parsed = datetime.fromisoformat(raw)
+                return parsed
+            except Exception:
+                return None
+        return None
 
     def format_forecast_display(self, forecast_data: Dict) -> str:
         """Format forecast for hero card display"""
@@ -351,8 +382,9 @@ class EnhancedHeroMetrics:
             # Get data from all sources (with fallback handling)
             hot_leads_data = await self._get_hot_leads_data(location_id)
             seller_pipeline_data = await self._get_seller_pipeline_data(location_id)
+            historical_commission_data = await self._get_historical_commission_data(location_id)
             ghl_health_data = await self._get_ghl_health_data(location_id)
-            performance_data = await self._get_performance_data()
+            performance_data = await self._get_performance_data(location_id)
 
             metrics = []
 
@@ -363,7 +395,13 @@ class EnhancedHeroMetrics:
             metrics.append(await self._create_cma_metric(seller_pipeline_data))
 
             # 3. 30-Day Revenue Forecast (NEW)
-            metrics.append(await self._create_forecast_metric(hot_leads_data, seller_pipeline_data))
+            metrics.append(
+                await self._create_forecast_metric(
+                    hot_leads_data,
+                    seller_pipeline_data,
+                    historical_commission_data,
+                )
+            )
 
             # 4. Enhanced System Performance
             metrics.append(await self._create_performance_metric(performance_data))
@@ -467,11 +505,14 @@ class EnhancedHeroMetrics:
                 urgency_level="high"
             )
 
-    async def _create_forecast_metric(self, leads_data: Dict, seller_data: Dict) -> HeroMetricData:
-        """Create 30-day revenue forecast metric (NEW)"""
+    async def _create_forecast_metric(
+        self,
+        leads_data: Dict,
+        seller_data: Dict,
+        historical_data: List[Dict[str, Any]],
+    ) -> HeroMetricData:
+        """Create 30-day revenue forecast metric from live pipeline + deal history."""
         try:
-            # Mock historical data for forecast (in production, load from database)
-            historical_data = self._generate_mock_historical_data()
             pipeline_data = self._extract_pipeline_data(leads_data, seller_data)
 
             forecast = self.revenue_forecaster.calculate_30_day_forecast(
@@ -516,7 +557,7 @@ class EnhancedHeroMetrics:
         """Create system performance metric"""
         try:
             compliance = performance_data.get("five_min_compliance", 0.0)
-            avg_response = performance_data.get("avg_response_time", 0)
+            avg_response_minutes = float(performance_data.get("avg_response_time_minutes", 0.0) or 0.0)
 
             compliance_pct = f"{compliance:.1%}"
 
@@ -536,7 +577,7 @@ class EnhancedHeroMetrics:
             return HeroMetricData(
                 label="5-Min Rule",
                 value=compliance_pct,
-                delta=f"{status} | Avg: {avg_response}ms",
+                delta=f"{status} | Avg: {avg_response_minutes:.1f}m",
                 color=color,
                 urgency_level=urgency,
                 tooltip="Percentage of leads contacted within 5 minutes (industry best practice)"
@@ -588,113 +629,353 @@ class EnhancedHeroMetrics:
             )
 
     async def _get_hot_leads_data(self, location_id: str) -> Dict:
-        """Get hot leads data with source ROI analysis"""
+        """Get hot leads data from live leads table with source ROI analysis."""
         try:
-            # Mock data for development (replace with real data sources)
-            mock_leads = [
-                {"id": "1", "source": "zillow", "score": 85, "commission": 15000, "cost_per_lead": 150, "status": "hot"},
-                {"id": "2", "source": "realtor.com", "score": 78, "commission": 12000, "cost_per_lead": 200, "status": "warm"},
-                {"id": "3", "source": "referral", "score": 92, "commission": 18000, "cost_per_lead": 0, "status": "hot"},
-                {"id": "4", "source": "zillow", "score": 88, "commission": 16000, "cost_per_lead": 150, "status": "hot"},
-                {"id": "5", "source": "facebook", "score": 82, "commission": 14000, "cost_per_lead": 75, "status": "hot"}
-            ]
+            normalized_location = (location_id or "").strip()
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            yesterday_start = today_start - timedelta(days=1)
+            source_costs = self._lead_source_cost_map()
 
-            # Calculate hot leads count
-            hot_count = len([lead for lead in mock_leads if lead["score"] >= 80])
+            hot_leads: List[Dict[str, Any]] = []
+            roi_source_data: List[Dict[str, Any]] = []
+            hot_today = 0
+            hot_yesterday = 0
 
-            # Get best performing source
-            best_source = self.lead_source_roi.get_best_performing_source(mock_leads)
+            async with AsyncSessionFactory() as session:
+                stmt = select(
+                    LeadModel.contact_id,
+                    LeadModel.location_id,
+                    ContactModel.location_id,
+                    LeadModel.score,
+                    LeadModel.temperature,
+                    LeadModel.budget_min,
+                    LeadModel.budget_max,
+                    LeadModel.metadata_json,
+                    LeadModel.created_at,
+                ).select_from(LeadModel).join(
+                    ContactModel,
+                    ContactModel.contact_id == LeadModel.contact_id,
+                    isouter=True,
+                )
+                if normalized_location:
+                    stmt = stmt.where(
+                        (LeadModel.location_id == normalized_location)
+                        | (
+                            LeadModel.location_id.is_(None)
+                            & (ContactModel.location_id == normalized_location)
+                        )
+                    )
+                rows = (await session.execute(stmt)).all()
+
+            for row in rows:
+                (
+                    contact_id,
+                    lead_location_id,
+                    contact_location_id,
+                    score,
+                    temperature,
+                    budget_min,
+                    budget_max,
+                    metadata_json,
+                    created_at,
+                ) = row
+
+                metadata = metadata_json if isinstance(metadata_json, dict) else {}
+                source = str(
+                    metadata.get("lead_source")
+                    or metadata.get("source")
+                    or metadata.get("channel")
+                    or "unknown"
+                ).strip().lower() or "unknown"
+                source_key = source.replace(" ", "_")
+                score_value = float(score or 0.0)
+                temp_value = str(temperature or "").strip().upper()
+                is_hot = temp_value == "HOT" or score_value >= 80.0
+                budget_for_commission = float(budget_max or budget_min or 0.0)
+                estimated_commission = (
+                    float(JorgeBusinessRules.calculate_commission(budget_for_commission))
+                    if budget_for_commission > 0
+                    else 0.0
+                )
+
+                roi_source_data.append(
+                    {
+                        "id": str(contact_id),
+                        "source": source_key,
+                        "score": score_value,
+                        "commission": estimated_commission,
+                        "cost_per_lead": float(source_costs.get(source_key, source_costs.get("unknown", 60.0))),
+                        "status": "hot" if is_hot else "warm",
+                    }
+                )
+
+                if not is_hot:
+                    continue
+
+                created_at_dt = created_at if isinstance(created_at, datetime) else None
+                if created_at_dt and created_at_dt >= today_start:
+                    hot_today += 1
+                elif created_at_dt and yesterday_start <= created_at_dt < today_start:
+                    hot_yesterday += 1
+
+                hot_leads.append(
+                    {
+                        "id": str(contact_id),
+                        "location_id": lead_location_id or contact_location_id,
+                        "score": score_value,
+                        "temperature": temp_value,
+                        "source": source_key,
+                        "commission": estimated_commission,
+                        "probability": max(0.35, min(0.9, score_value / 100.0)) if score_value > 0 else 0.5,
+                        "close_date": metadata.get("close_date"),
+                        "created_at": created_at_dt,
+                    }
+                )
+
+            best_source = self.lead_source_roi.get_best_performing_source(roi_source_data) if roi_source_data else {}
 
             return {
-                "count": hot_count,
+                "count": len(hot_leads),
                 "best_source": best_source,
-                "delta": 2,  # Mock delta
-                "total_leads": len(mock_leads)
+                "delta": hot_today - hot_yesterday,
+                "total_leads": len(rows),
+                "hot_leads": hot_leads,
             }
-
         except Exception as e:
             self.logger.error(f"Error getting hot leads data: {e}")
-            return {"count": 0, "best_source": {}, "delta": 0}
+            return {"count": 0, "best_source": {}, "delta": 0, "total_leads": 0, "hot_leads": []}
 
     async def _get_seller_pipeline_data(self, location_id: str) -> Dict:
-        """Get seller pipeline data with CMA analysis"""
+        """Get seller pipeline data from live conversation records."""
         try:
-            # Mock Q4 sellers data
-            mock_q4_sellers = [
-                {"id": "s1", "name": "John Smith", "questions_answered": 4, "price_expectation": 450000, "urgency": "high"},
-                {"id": "s2", "name": "Sarah Johnson", "questions_answered": 4, "price_expectation": 650000, "urgency": "medium"},
-                {"id": "s3", "name": "Mike Davis", "questions_answered": 4, "price_expectation": 320000, "urgency": "high"},
-            ]
+            normalized_location = (location_id or "").strip()
+            q4_sellers: List[Dict[str, Any]] = []
 
-            # Calculate commission potential
+            async with AsyncSessionFactory() as session:
+                rows = (
+                    await session.execute(
+                        select(
+                            ConversationModel.contact_id,
+                            ConversationModel.stage,
+                            ConversationModel.questions_answered,
+                            ConversationModel.is_qualified,
+                            ConversationModel.extracted_data,
+                            ConversationModel.metadata_json,
+                            ConversationModel.updated_at,
+                            ContactModel.location_id,
+                            ContactModel.name,
+                        ).select_from(ConversationModel).join(
+                            ContactModel,
+                            ContactModel.contact_id == ConversationModel.contact_id,
+                            isouter=True,
+                        ).where(ConversationModel.bot_type == "seller")
+                    )
+                ).all()
+
+            for row in rows:
+                (
+                    contact_id,
+                    stage,
+                    questions_answered,
+                    is_qualified,
+                    extracted_data,
+                    metadata_json,
+                    updated_at,
+                    contact_location_id,
+                    contact_name,
+                ) = row
+                extracted = extracted_data if isinstance(extracted_data, dict) else {}
+                metadata = metadata_json if isinstance(metadata_json, dict) else {}
+                row_location = str(contact_location_id or metadata.get("location_id") or "").strip()
+                if normalized_location and row_location != normalized_location:
+                    continue
+
+                stage_upper = str(stage or "").upper()
+                ready_for_cma = bool(is_qualified) or stage_upper in {"Q4", "QUALIFIED"} or int(questions_answered or 0) >= 4
+                if not ready_for_cma:
+                    continue
+
+                price_expectation = self._coerce_price(extracted.get("price_expectation"))
+                urgency = str(extracted.get("urgency") or "medium").strip().lower() or "medium"
+                if urgency not in {"high", "medium", "low"}:
+                    urgency = "medium"
+
+                seller_entry = {
+                    "id": str(contact_id),
+                    "name": contact_name or metadata.get("contact_name") or str(contact_id),
+                    "questions_answered": int(questions_answered or 0),
+                    "price_expectation": price_expectation,
+                    "urgency": urgency,
+                    "close_date": metadata.get("estimated_close_date"),
+                    "updated_at": updated_at if isinstance(updated_at, datetime) else None,
+                }
+                q4_sellers.append(seller_entry)
+
             commission_potential = sum(
                 self.cma_analyzer.calculate_commission_potential(seller)
-                for seller in mock_q4_sellers
+                for seller in q4_sellers
             )
 
             return {
-                "q4_ready": mock_q4_sellers,
+                "q4_ready": q4_sellers,
                 "commission_potential": commission_potential,
-                "high_urgency_count": len([s for s in mock_q4_sellers if s["urgency"] == "high"])
+                "high_urgency_count": len([s for s in q4_sellers if s.get("urgency") == "high"]),
             }
-
         except Exception as e:
             self.logger.error(f"Error getting seller pipeline data: {e}")
-            return {"q4_ready": [], "commission_potential": 0}
+            return {"q4_ready": [], "commission_potential": 0.0, "high_urgency_count": 0}
 
     async def _get_ghl_health_data(self, location_id: str) -> Dict:
-        """Get GHL integration health data"""
+        """Get GHL integration health data from live integration status service."""
         try:
-            # Use real GHL client for health check
-            ghl_client = GHLClient()
-            health_result = await ghl_client.health_check()
+            from command_center.components.ghl_integration_status import (
+                ConnectionStatus,
+                create_ghl_integration_status,
+            )
 
+            status_component = await create_ghl_integration_status()
+            status = await status_component.get_integration_status(location_id)
+            connection_status = status.connection.status
             return {
-                "healthy": health_result.get("healthy", False),
-                "response_time": 142,  # Mock response time
-                "webhook_count": 27,   # Mock webhook count today
-                "api_key_valid": health_result.get("api_key_valid", False)
+                "healthy": connection_status != ConnectionStatus.DISCONNECTED,
+                "response_time": round(float(status.connection.response_time_ms or 0.0), 1),
+                "webhook_count": int(status.webhooks.total_received or 0),
+                "connection_status": connection_status.value,
+                "errors_last_hour": int(status.connection.errors_last_hour or 0),
             }
-
         except Exception as e:
-            self.logger.error(f"Error getting GHL health data: {e}")
-            return {"healthy": False, "error": str(e)}
+            self.logger.warning(f"GHL integration status service unavailable, falling back to basic health check: {e}")
+            try:
+                ghl_client = GHLClient()
+                health_result = await ghl_client.health_check()
+                return {
+                    "healthy": bool(health_result.get("healthy", False)),
+                    "response_time": round(float(health_result.get("response_time_ms", 0.0) or 0.0), 1),
+                    "webhook_count": 0,
+                    "connection_status": "degraded",
+                    "errors_last_hour": 0,
+                }
+            except Exception as fallback_error:
+                self.logger.error(f"Error getting GHL health data: {fallback_error}")
+                return {"healthy": False, "response_time": 0.0, "webhook_count": 0, "error": str(fallback_error)}
 
-    async def _get_performance_data(self) -> Dict:
-        """Get system performance data"""
+    async def _get_performance_data(self, location_id: str) -> Dict:
+        """Get live 5-minute-rule performance from event-derived trends + tracker stats."""
         try:
-            # Mock performance data (replace with real metrics)
-            return {
-                "five_min_compliance": 0.92,  # 92% compliance
-                "avg_response_time": 287,     # 287ms average
-                "cache_hit_rate": 0.95,       # 95% cache hits
-                "api_success_rate": 0.98      # 98% API success
-            }
+            dashboard_service = DashboardDataService()
+            trends = await dashboard_service.get_hourly_performance_trends(hours=24, location_id=location_id)
 
+            response_counts = trends.get("first_response_total_counts") if isinstance(trends, dict) else []
+            response_within_5_counts = trends.get("first_response_within_5_counts") if isinstance(trends, dict) else []
+            avg_response_min = trends.get("avg_response_time_min") if isinstance(trends, dict) else []
+
+            total_responses = (
+                int(sum(response_counts))
+                if isinstance(response_counts, list)
+                else int(trends.get("first_response_total", 0) or 0)
+            )
+            within_five = (
+                int(sum(response_within_5_counts))
+                if isinstance(response_within_5_counts, list)
+                else int(trends.get("first_response_within_5_min", 0) or 0)
+            )
+            five_min_compliance = (within_five / total_responses) if total_responses > 0 else 0.0
+
+            if (
+                isinstance(avg_response_min, list)
+                and isinstance(response_counts, list)
+                and len(avg_response_min) == len(response_counts)
+                and total_responses > 0
+            ):
+                weighted_sum = 0.0
+                for idx, avg_value in enumerate(avg_response_min):
+                    weighted_sum += float(avg_value or 0.0) * float(response_counts[idx] or 0)
+                avg_response_minutes = weighted_sum / total_responses
+            elif isinstance(avg_response_min, list) and avg_response_min:
+                non_zero = [float(value) for value in avg_response_min if float(value or 0.0) > 0.0]
+                avg_response_minutes = (sum(non_zero) / len(non_zero)) if non_zero else 0.0
+            else:
+                avg_response_minutes = 0.0
+
+            perf_metrics = await get_metrics_service().get_performance_metrics()
+            cache_hit_rate = float(perf_metrics.cache_hit_rate or 0.0) / 100.0
+            api_success_rate = 1.0 - (float(perf_metrics.ghl_error_rate or 0.0) / 100.0)
+
+            return {
+                "five_min_compliance": max(0.0, min(1.0, five_min_compliance)),
+                "avg_response_time_minutes": round(float(avg_response_minutes or 0.0), 2),
+                "sample_size": total_responses,
+                "cache_hit_rate": max(0.0, min(1.0, cache_hit_rate)),
+                "api_success_rate": max(0.0, min(1.0, api_success_rate)),
+            }
         except Exception as e:
             self.logger.error(f"Error getting performance data: {e}")
-            return {"five_min_compliance": 0.0, "avg_response_time": 0}
+            return {
+                "five_min_compliance": 0.0,
+                "avg_response_time_minutes": 0.0,
+                "sample_size": 0,
+                "cache_hit_rate": 0.0,
+                "api_success_rate": 0.0,
+            }
 
-    def _generate_mock_historical_data(self) -> List[Dict]:
-        """Generate mock historical data for forecasting"""
-        base_date = datetime.now() - timedelta(days=60)
-        return [
-            {"date": base_date + timedelta(days=i), "commission": 1500 + (i * 50)}
-            for i in range(60)
-        ]
+    async def _get_historical_commission_data(self, location_id: str, days: int = 60) -> List[Dict[str, Any]]:
+        """Load historical closed-commission data from deals for forecasting baseline."""
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=max(14, int(days or 60)))
+            normalized_location = (location_id or "").strip()
+            async with AsyncSessionFactory() as session:
+                rows = (
+                    await session.execute(
+                        select(
+                            DealModel.closed_at,
+                            DealModel.commission,
+                            DealModel.metadata_json,
+                            ContactModel.location_id,
+                        ).select_from(DealModel).join(
+                            ContactModel,
+                            ContactModel.contact_id == DealModel.contact_id,
+                            isouter=True,
+                        ).where(
+                            DealModel.closed_at.isnot(None),
+                            DealModel.closed_at >= cutoff,
+                        )
+                    )
+                ).all()
+
+            data: List[Dict[str, Any]] = []
+            for closed_at, commission, metadata_json, contact_location_id in rows:
+                closed_at_dt = closed_at if isinstance(closed_at, datetime) else None
+                if not closed_at_dt:
+                    continue
+                metadata = metadata_json if isinstance(metadata_json, dict) else {}
+                row_location = str(contact_location_id or metadata.get("location_id") or "").strip()
+                if normalized_location and row_location != normalized_location:
+                    continue
+                data.append(
+                    {
+                        "date": closed_at_dt,
+                        "commission": float(commission or 0.0),
+                    }
+                )
+            return data
+        except Exception as e:
+            self.logger.error(f"Error loading historical commission data: {e}")
+            return []
 
     def _extract_pipeline_data(self, leads_data: Dict, seller_data: Dict) -> List[Dict]:
         """Extract pipeline data for forecasting"""
         pipeline = []
 
         # Add hot leads to pipeline
-        hot_count = leads_data.get("count", 0)
-        for i in range(hot_count):
+        hot_leads = leads_data.get("hot_leads", []) if isinstance(leads_data, dict) else []
+        for lead in hot_leads:
+            if not isinstance(lead, dict):
+                continue
             pipeline.append({
-                "id": f"lead_{i}",
-                "commission": 15000,
-                "probability": 0.7,
-                "close_date": "2026-02-15"
+                "id": str(lead.get("id", "unknown")),
+                "commission": float(lead.get("commission", 0.0) or 0.0),
+                "probability": float(lead.get("probability", 0.65) or 0.65),
+                "close_date": lead.get("close_date"),
             })
 
         # Add seller pipeline
@@ -706,10 +987,36 @@ class EnhancedHeroMetrics:
                     "id": seller.get("id", "unknown"),
                     "commission": commission,
                     "probability": 0.8 if seller.get("urgency") == "high" else 0.6,
-                    "close_date": "2026-02-20"
+                    "close_date": seller.get("close_date"),
                 })
 
         return pipeline
+
+    @staticmethod
+    def _lead_source_cost_map() -> Dict[str, float]:
+        """Deterministic per-source CPL assumptions for ROI calculations."""
+        return {
+            "referral": 0.0,
+            "google_ads": 65.0,
+            "facebook": 45.0,
+            "zillow": 125.0,
+            "realtor.com": 150.0,
+            "organic": 25.0,
+            "unknown": 60.0,
+        }
+
+    @staticmethod
+    def _coerce_price(value: Any) -> float:
+        """Coerce mixed numeric/text price values into float."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            normalized = value.strip().replace("$", "").replace(",", "")
+            try:
+                return float(normalized)
+            except Exception:
+                return 0.0
+        return 0.0
 
     def _create_fallback_metrics(self) -> List[HeroMetricData]:
         """Create fallback metrics when data sources fail"""

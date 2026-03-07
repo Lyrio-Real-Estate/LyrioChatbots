@@ -4,6 +4,7 @@ Claude AI Client for Jorge's Real Estate Bots.
 Simplified version of EnterpriseHub's LLM client, focused on Claude only.
 Provides intelligent routing, prompt caching, and async support.
 """
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import AsyncGenerator, Dict, List, Optional
@@ -12,6 +13,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from bots.shared.config import settings
 from bots.shared.logger import get_logger
+from bots.shared.performance_tracker import get_performance_tracker
 
 logger = get_logger(__name__)
 
@@ -75,6 +77,7 @@ class ClaudeClient:
         self.api_key = api_key or settings.anthropic_api_key
         self._client = None
         self._async_client = None
+        self.performance_tracker = get_performance_tracker()
 
     def _init_client(self):
         """Initialize synchronous client (lazy loading)."""
@@ -175,6 +178,7 @@ class ClaudeClient:
                 system_blocks.append({"type": "text", "text": system_prompt})
 
         try:
+            started_at = time.time()
             response = await self._async_client.messages.create(
                 model=target_model,
                 max_tokens=max_tokens,
@@ -194,6 +198,16 @@ class ClaudeClient:
             if cache_read > 0:
                 savings_pct = (cache_read / (input_tokens or 1)) * 100
                 logger.info(f"Cache hit! Read {cache_read} tokens ({savings_pct:.1f}% savings)")
+
+            response_time_ms = (time.time() - started_at) * 1000.0
+            try:
+                await self.performance_tracker.record_ai_call(
+                    response_time_ms=response_time_ms,
+                    five_minute_compliant=response_time_ms <= 300000.0,
+                    was_pattern_match=False,
+                )
+            except Exception as metric_exc:
+                logger.debug(f"Failed to record AI call metric: {metric_exc}")
 
             return LLMResponse(
                 content=response.content[0].text,

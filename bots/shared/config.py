@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # ========== DATABASE CONFIGURATION ==========
     database_url: str = "postgresql://postgres:postgres@localhost:5432/jorge_bots"
     redis_url: str = "redis://localhost:6379/0"
+    db_pool_size: int = 3
+    db_max_overflow: int = 2
+    db_pool_timeout_seconds: int = 10
+    db_pool_recycle_seconds: int = 1800
+    db_pool_use_lifo: bool = True
 
     # Redis Configuration
     redis_max_connections: int = 50

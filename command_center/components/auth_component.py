@@ -179,26 +179,82 @@ async def _exchange_ghl_oauth_code(code: str) -> Optional[Dict[str, Any]]:
     if not client_id or not client_secret or not redirect_uri:
         raise ValueError("GoHighLevel OAuth is not configured.")
 
-    data = {
-        "grant_type": "authorization_code",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect_uri,
-        "code": code,
-        "user_type": _ghl_oauth_user_type(),
-    }
+    def _extract_error_message(response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+
+        candidates: list[str] = []
+        if isinstance(payload, dict):
+            for key in ("error_description", "error", "message", "msg", "detail"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    candidates.append(value.strip())
+            if not candidates:
+                candidates.append(json.dumps(payload)[:300])
+        else:
+            raw_text = (response.text or "").strip()
+            if raw_text:
+                candidates.append(raw_text[:300])
+
+        return candidates[0] if candidates else "Unknown error"
+
+    preferred_user_type = _ghl_oauth_user_type()
+    alternate_user_type = "Location" if preferred_user_type == "Company" else "Company"
+    user_type_candidates = [preferred_user_type, alternate_user_type]
 
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.post(
-            _GHL_OAUTH_TOKEN_URL,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data=data,
-        )
-        response.raise_for_status()
-        return response.json()
+        last_error: Optional[Exception] = None
+        for attempt_idx, user_type in enumerate(user_type_candidates):
+            data = {
+                "grant_type": "authorization_code",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "code": code,
+                "user_type": user_type,
+            }
+
+            response = await client.post(
+                _GHL_OAUTH_TOKEN_URL,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data=data,
+            )
+
+            try:
+                response.raise_for_status()
+                if attempt_idx > 0:
+                    logger.warning(
+                        f"GHL OAuth token exchange succeeded after retry with user_type={user_type} "
+                        f"(configured={preferred_user_type})"
+                    )
+                return response.json()
+            except httpx.HTTPStatusError as err:
+                last_error = err
+                status = err.response.status_code if err.response else response.status_code
+                message = _extract_error_message(err.response or response)
+                message_lower = message.lower()
+
+                user_type_rejected = "user_type" in message_lower and "invalid" in message_lower
+                can_retry_user_type = attempt_idx == 0 and status == 400 and user_type_rejected
+                if can_retry_user_type:
+                    logger.warning(
+                        f"GHL OAuth token exchange rejected user_type={user_type}; "
+                        f"retrying with user_type={alternate_user_type}. message={message}"
+                    )
+                    continue
+
+                raise RuntimeError(
+                    f"GHL OAuth token exchange failed ({status}). {message}"
+                ) from err
+
+        if isinstance(last_error, Exception):
+            raise last_error
+        raise RuntimeError("GHL OAuth token exchange failed with unknown error.")
 
 
 def _should_use_ngrok_redirect(configured_redirect_uri: Optional[str]) -> bool:
@@ -472,6 +528,41 @@ def _debug_payload_keys(payload: Any) -> str:
     return type(payload).__name__
 
 
+def _try_recover_existing_authenticated_user() -> Optional[User]:
+    """
+    Best-effort recovery of an already-authenticated dashboard user.
+
+    Used when an OAuth callback code is stale/invalid but the user already has
+    a valid local dashboard session.
+    """
+    try:
+        _restore_auth_session()
+    except Exception as restore_error:
+        logger.warning(f"Failed to restore auth session during OAuth recovery: {restore_error}")
+
+    auth_token = st.session_state.get("auth_token")
+    if not auth_token:
+        return None
+
+    try:
+        auth_service = get_auth_service()
+        user = run_async(auth_service.validate_token(auth_token))
+        if not user or not user.is_active:
+            return None
+        st.session_state.user = {
+            "user_id": user.user_id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role.value,
+            "location_id": st.session_state.get("oauth_location_id"),
+        }
+        st.session_state.must_change_password = user.must_change_password
+        return user
+    except Exception as validate_error:
+        logger.warning(f"Failed validating existing session during OAuth recovery: {validate_error}")
+        return None
+
+
 def _consume_ghl_oauth_callback() -> Optional[User]:
     code = _read_query_param("code")
     if not code:
@@ -623,7 +714,25 @@ def _consume_ghl_oauth_callback() -> Optional[User]:
         return user
     except Exception as e:
         logger.exception(f"GHL OAuth callback error: {e}")
-        st.error("GoHighLevel OAuth login failed. Please try again.")
+        error_text = str(e).lower()
+        invalid_grant = (
+            "invalid grant" in error_text
+            or "authorization code is invalid" in error_text
+            or "invalid_grant" in error_text
+        )
+        if invalid_grant:
+            recovered_user = _try_recover_existing_authenticated_user()
+            if recovered_user:
+                logger.info("Ignored stale OAuth callback code because a valid dashboard session already exists.")
+                _write_query_param("code", None)
+                _write_query_param("state", None)
+                _write_query_param("error", None)
+                st.rerun()
+                return recovered_user
+        st.error(f"GoHighLevel OAuth login failed. {e}")
+        _write_query_param("code", None)
+        _write_query_param("state", None)
+        _write_query_param("error", None)
         return None
 
 

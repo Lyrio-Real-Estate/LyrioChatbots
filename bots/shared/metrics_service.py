@@ -162,6 +162,30 @@ class MetricsService:
             logger.exception(f"Error getting cost savings: {e}")
             return self._get_fallback_cost_savings()
 
+    async def get_response_time_distribution(self) -> Dict[str, Any]:
+        """
+        Get live response-time distribution for cache/AI/GHL latency buckets.
+
+        Returns:
+            Dict with bucket labels and per-service percentage series.
+
+        Cache TTL: 30 seconds (real-time dashboard updates).
+        """
+        cache_key = "metrics:dashboard:response_distribution"
+        try:
+            cached = await self.cache_service.get(cache_key)
+            if cached:
+                logger.debug("Response-time distribution served from cache")
+                return cached
+
+            distribution = await self.performance_tracker.get_response_time_distribution()
+            await self.cache_service.set(cache_key, distribution, ttl=30)
+            logger.debug("Response-time distribution generated and cached")
+            return distribution
+        except Exception as e:
+            logger.exception(f"Error getting response-time distribution: {e}")
+            return self._get_fallback_response_time_distribution()
+
     # =================================================================
     # Lead Analytics Metrics
     # =================================================================
@@ -833,6 +857,31 @@ class MetricsService:
             lead_bot_savings=0.0,
             seller_bot_savings=0.0
         )
+
+    def _get_fallback_response_time_distribution(self) -> Dict[str, Any]:
+        """Return fallback response-time distribution when errors occur."""
+        labels = [
+            "0-100ms",
+            "100-200ms",
+            "200-400ms",
+            "400-800ms",
+            "800-1.2s",
+            "1.2-2s",
+            "2-4s",
+            "4-8s",
+            "8s+",
+        ]
+        return {
+            "labels": labels,
+            "cache_hits_pct": [0.0] * len(labels),
+            "ai_calls_pct": [0.0] * len(labels),
+            "ghl_calls_pct": [0.0] * len(labels),
+            "cache_hits_total": 0,
+            "ai_calls_total": 0,
+            "ghl_calls_total": 0,
+            "generated_at": datetime.now().isoformat(),
+            "error": "Response-time distribution temporarily unavailable",
+        }
 
     def _get_fallback_budget_distribution(self) -> BudgetDistribution:
         """Return fallback budget distribution when errors occur."""

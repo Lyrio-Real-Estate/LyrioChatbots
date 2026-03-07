@@ -11,7 +11,7 @@ Provides unified data access with consistent caching and error handling.
 """
 import asyncio
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Date, cast, func, select
@@ -335,11 +335,13 @@ class DashboardDataService:
             metrics_task = self.metrics_service.get_performance_metrics()
             cache_stats_task = self.metrics_service.get_cache_statistics()
             cost_savings_task = self.metrics_service.get_cost_savings()
+            response_dist_task = self.metrics_service.get_response_time_distribution()
 
-            metrics, cache_stats, cost_savings = await asyncio.gather(
+            metrics, cache_stats, cost_savings, response_dist = await asyncio.gather(
                 metrics_task,
                 cache_stats_task,
                 cost_savings_task,
+                response_dist_task,
                 return_exceptions=True
             )
 
@@ -348,6 +350,7 @@ class DashboardDataService:
                 'performance_metrics': asdict(metrics) if not isinstance(metrics, Exception) else None,
                 'cache_statistics': asdict(cache_stats) if not isinstance(cache_stats, Exception) else None,
                 'cost_savings': asdict(cost_savings) if not isinstance(cost_savings, Exception) else None,
+                'response_time_distribution': response_dist if not isinstance(response_dist, Exception) else None,
                 'generated_at': datetime.now().isoformat(),
             }
 
@@ -365,9 +368,308 @@ class DashboardDataService:
             logger.exception(f"Error getting performance analytics: {e}")
             return self._get_fallback_performance_analytics()
 
+    async def get_hourly_performance_trends(
+        self,
+        hours: int = 24,
+        location_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get true hourly qualification/response trends from conversation events.
+
+        Args:
+            hours: Number of trailing hourly buckets to return (default 24).
+
+        Returns:
+            Dict with hour labels and real hourly trend series.
+
+        Cache TTL: 60 seconds (keeps chart responsive while staying fresh).
+        """
+        safe_hours = max(1, min(int(hours or 24), 168))
+        normalized_location = (location_id or "").strip()
+        location_key = normalized_location or "all"
+        cache_key = f"dashboard:performance_hourly:{safe_hours}:{location_key}"
+
+        try:
+            cached = await self.cache_service.get(cache_key)
+            if isinstance(cached, dict):
+                return cached
+
+            end_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+            start_hour = end_hour - timedelta(hours=safe_hours - 1)
+            hour_buckets = [start_hour + timedelta(hours=i) for i in range(safe_hours)]
+
+            inbound_counts_by_hour: Dict[datetime, int] = {}
+            qualified_counts_by_hour: Dict[datetime, int] = {}
+            response_sum_minutes_by_hour: Dict[datetime, float] = {}
+            response_count_by_hour: Dict[datetime, int] = {}
+            response_within_5_count_by_hour: Dict[datetime, int] = {}
+            inbound_before_window = 0
+            qualified_before_window = 0
+            async with AsyncSessionFactory() as session:
+                rows = (
+                    await session.execute(
+                        select(
+                            ConversationModel.created_at,
+                            ConversationModel.updated_at,
+                            ConversationModel.conversation_started,
+                            ConversationModel.last_activity,
+                            ConversationModel.is_qualified,
+                            ConversationModel.conversation_history,
+                            ConversationModel.extracted_data,
+                            ConversationModel.metadata_json,
+                            ContactModel.location_id,
+                        ).select_from(ConversationModel).join(
+                            ContactModel,
+                            ContactModel.contact_id == ConversationModel.contact_id,
+                            isouter=True,
+                        ).where(ConversationModel.bot_type == "seller")
+                    )
+                ).all()
+
+            for row in rows:
+                (
+                    created_at,
+                    updated_at,
+                    conversation_started,
+                    last_activity,
+                    is_qualified,
+                    conversation_history,
+                    extracted_data,
+                    metadata_json,
+                    contact_location_id,
+                ) = row
+
+                extracted = extracted_data if isinstance(extracted_data, dict) else {}
+                history = conversation_history if isinstance(conversation_history, list) else []
+                metadata = metadata_json if isinstance(metadata_json, dict) else {}
+                conversation_location = str(contact_location_id or metadata.get("location_id") or "").strip()
+                if normalized_location and conversation_location != normalized_location:
+                    continue
+
+                first_inbound_at = self._first_inbound_event_at(
+                    extracted=extracted,
+                    history=history,
+                    conversation_started=conversation_started,
+                    created_at=created_at,
+                )
+                first_bot_response_at = self._first_bot_response_event_at(
+                    extracted=extracted,
+                    history=history,
+                )
+                qualified_at = self._qualification_event_at(
+                    extracted=extracted,
+                    history=history,
+                    is_qualified=bool(is_qualified),
+                    updated_at=updated_at,
+                )
+
+                if first_inbound_at:
+                    inbound_bucket = self._normalize_hour_bucket(first_inbound_at)
+                    if inbound_bucket and inbound_bucket < start_hour:
+                        inbound_before_window += 1
+                    elif inbound_bucket and inbound_bucket in hour_buckets:
+                        inbound_counts_by_hour[inbound_bucket] = inbound_counts_by_hour.get(inbound_bucket, 0) + 1
+
+                if qualified_at:
+                    qualified_bucket = self._normalize_hour_bucket(qualified_at)
+                    if qualified_bucket and qualified_bucket < start_hour:
+                        qualified_before_window += 1
+                    elif qualified_bucket and qualified_bucket in hour_buckets:
+                        qualified_counts_by_hour[qualified_bucket] = qualified_counts_by_hour.get(qualified_bucket, 0) + 1
+
+                if first_inbound_at and first_bot_response_at:
+                    latency_minutes = (first_bot_response_at - first_inbound_at).total_seconds() / 60.0
+                    if 0.0 <= latency_minutes <= 24.0 * 60.0:
+                        response_bucket = self._normalize_hour_bucket(first_bot_response_at)
+                        if response_bucket and response_bucket in hour_buckets:
+                            response_sum_minutes_by_hour[response_bucket] = (
+                                response_sum_minutes_by_hour.get(response_bucket, 0.0) + latency_minutes
+                            )
+                            response_count_by_hour[response_bucket] = response_count_by_hour.get(response_bucket, 0) + 1
+                            if latency_minutes <= 5.0:
+                                response_within_5_count_by_hour[response_bucket] = (
+                                    response_within_5_count_by_hour.get(response_bucket, 0) + 1
+                                )
+
+            labels: List[str] = []
+            qualification_rate_pct: List[float] = []
+            avg_response_time_min: List[float] = []
+            conversation_counts: List[int] = []
+            qualified_counts: List[int] = []
+            first_response_total_counts: List[int] = []
+            first_response_within_5_counts: List[int] = []
+            running_inbound = inbound_before_window
+            running_qualified = qualified_before_window
+
+            for hour_bucket in hour_buckets:
+                labels.append(hour_bucket.strftime("%H:%M"))
+
+                inbound_count = int(inbound_counts_by_hour.get(hour_bucket, 0))
+                qualified_count = int(qualified_counts_by_hour.get(hour_bucket, 0))
+
+                conversation_counts.append(inbound_count)
+                qualified_counts.append(qualified_count)
+
+                running_inbound += inbound_count
+                running_qualified += qualified_count
+                if running_inbound > 0:
+                    rate_value = max(0.0, min(100.0, (running_qualified / running_inbound) * 100.0))
+                    qualification_rate_pct.append(round(rate_value, 2))
+                else:
+                    qualification_rate_pct.append(0.0)
+
+                response_count = response_count_by_hour.get(hour_bucket, 0)
+                first_response_total_counts.append(int(response_count))
+                first_response_within_5_counts.append(int(response_within_5_count_by_hour.get(hour_bucket, 0)))
+                if response_count <= 0:
+                    avg_response_time_min.append(0.0)
+                else:
+                    avg_minutes = response_sum_minutes_by_hour.get(hour_bucket, 0.0) / float(response_count)
+                    avg_response_time_min.append(round(avg_minutes, 2))
+
+            first_response_total = sum(first_response_total_counts)
+            first_response_within_5 = sum(first_response_within_5_counts)
+            trends = {
+                "labels": labels,
+                "qualification_rate_pct": qualification_rate_pct,
+                "avg_response_time_min": avg_response_time_min,
+                "conversation_counts": conversation_counts,
+                "qualified_counts": qualified_counts,
+                "first_response_total_counts": first_response_total_counts,
+                "first_response_within_5_counts": first_response_within_5_counts,
+                "first_response_total": first_response_total,
+                "first_response_within_5_min": first_response_within_5,
+                "has_data": (
+                    any(count > 0 for count in conversation_counts)
+                    or any(count > 0 for count in qualified_counts)
+                    or any(value > 0 for value in avg_response_time_min)
+                ),
+                "generated_at": datetime.utcnow().isoformat(),
+            }
+
+            await self.cache_service.set(cache_key, trends, ttl=60)
+            return trends
+        except Exception as e:
+            logger.exception(f"Error getting hourly performance trends: {e}")
+            return self._get_fallback_hourly_performance_trends(hours=safe_hours)
+
     # =================================================================
     # Private Data Fetching Methods
     # =================================================================
+
+    @staticmethod
+    def _normalize_hour_bucket(value: Any) -> Optional[datetime]:
+        """Normalize DB timestamp values to naive top-of-hour datetimes."""
+        parsed = DashboardDataService._parse_event_datetime(value)
+        if not parsed:
+            return None
+        return parsed.replace(minute=0, second=0, microsecond=0, tzinfo=None)
+
+    @staticmethod
+    def _parse_event_datetime(value: Any) -> Optional[datetime]:
+        """Parse potentially mixed datetime/string event values into UTC-naive datetimes."""
+        if value is None:
+            return None
+
+        parsed: Optional[datetime] = None
+        if isinstance(value, datetime):
+            parsed = value
+        elif isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            if raw.endswith("Z"):
+                raw = f"{raw[:-1]}+00:00"
+            try:
+                parsed = datetime.fromisoformat(raw)
+            except Exception:
+                return None
+        else:
+            return None
+
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+
+    @staticmethod
+    def _extract_history_first_user_timestamp(history: List[Dict[str, Any]]) -> Optional[datetime]:
+        """Extract timestamp of first observed inbound user event from conversation history."""
+        for entry in history:
+            if not isinstance(entry, dict):
+                continue
+            answer = entry.get("answer")
+            if isinstance(answer, str) and answer.strip():
+                parsed = DashboardDataService._parse_event_datetime(entry.get("timestamp"))
+                if parsed:
+                    return parsed
+        return None
+
+    @staticmethod
+    def _extract_history_first_bot_timestamp(history: List[Dict[str, Any]]) -> Optional[datetime]:
+        """Extract timestamp of first observed outbound bot event from conversation history."""
+        for entry in history:
+            if not isinstance(entry, dict):
+                continue
+            bot_response = entry.get("bot_response")
+            if isinstance(bot_response, str) and bot_response.strip():
+                parsed = DashboardDataService._parse_event_datetime(entry.get("timestamp"))
+                if parsed:
+                    return parsed
+        return None
+
+    @staticmethod
+    def _extract_history_qualified_timestamp(history: List[Dict[str, Any]]) -> Optional[datetime]:
+        """Infer qualification event timestamp from Q4 answer payloads."""
+        for entry in history:
+            if not isinstance(entry, dict):
+                continue
+            extracted = entry.get("extracted_data")
+            if not isinstance(extracted, dict):
+                continue
+            offer_accepted = extracted.get("offer_accepted") is True
+            timeline_ok = extracted.get("timeline_acceptable") is True
+            if offer_accepted and timeline_ok:
+                parsed = DashboardDataService._parse_event_datetime(entry.get("timestamp"))
+                if parsed:
+                    return parsed
+        return None
+
+    def _first_inbound_event_at(
+        self,
+        extracted: Dict[str, Any],
+        history: List[Dict[str, Any]],
+        conversation_started: Optional[datetime],
+        created_at: Optional[datetime],
+    ) -> Optional[datetime]:
+        return (
+            self._parse_event_datetime(extracted.get("first_inbound_at"))
+            or self._extract_history_first_user_timestamp(history)
+            or self._parse_event_datetime(conversation_started)
+            or self._parse_event_datetime(created_at)
+        )
+
+    def _first_bot_response_event_at(
+        self,
+        extracted: Dict[str, Any],
+        history: List[Dict[str, Any]],
+    ) -> Optional[datetime]:
+        return (
+            self._parse_event_datetime(extracted.get("first_bot_response_at"))
+            or self._extract_history_first_bot_timestamp(history)
+        )
+
+    def _qualification_event_at(
+        self,
+        extracted: Dict[str, Any],
+        history: List[Dict[str, Any]],
+        is_qualified: bool,
+        updated_at: Optional[datetime],
+    ) -> Optional[datetime]:
+        return (
+            self._parse_event_datetime(extracted.get("qualified_at"))
+            or self._extract_history_qualified_timestamp(history)
+            or (self._parse_event_datetime(updated_at) if is_qualified else None)
+        )
 
     async def _fetch_active_conversations(
         self,
@@ -865,8 +1167,32 @@ class DashboardDataService:
             'performance_metrics': None,
             'cache_statistics': None,
             'cost_savings': None,
+            'response_time_distribution': None,
             'generated_at': datetime.now().isoformat(),
             'error': 'Performance data temporarily unavailable'
+        }
+
+    def _get_fallback_hourly_performance_trends(self, hours: int = 24) -> Dict[str, Any]:
+        """Return empty hourly performance trend data when errors occur."""
+        safe_hours = max(1, min(int(hours or 24), 168))
+        end_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        start_hour = end_hour - timedelta(hours=safe_hours - 1)
+        hour_buckets = [start_hour + timedelta(hours=i) for i in range(safe_hours)]
+        labels = [bucket.strftime("%H:%M") for bucket in hour_buckets]
+
+        return {
+            "labels": labels,
+            "qualification_rate_pct": [0.0 for _ in hour_buckets],
+            "avg_response_time_min": [0.0 for _ in hour_buckets],
+            "conversation_counts": [0 for _ in hour_buckets],
+            "qualified_counts": [0 for _ in hour_buckets],
+            "first_response_total_counts": [0 for _ in hour_buckets],
+            "first_response_within_5_counts": [0 for _ in hour_buckets],
+            "first_response_total": 0,
+            "first_response_within_5_min": 0,
+            "has_data": False,
+            "generated_at": datetime.utcnow().isoformat(),
+            "error": "Hourly trend data temporarily unavailable",
         }
 
     # =================================================================

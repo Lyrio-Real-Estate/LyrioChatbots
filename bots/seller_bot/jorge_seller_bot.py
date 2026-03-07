@@ -485,6 +485,7 @@ class JorgeSellerBot:
         try:
             self.logger.info(f"Processing seller message for contact {contact_id}")
             ghl_client = await self._get_ghl_client_for_location(location_id)
+            message_received_at = datetime.now(timezone.utc)
 
             # --- Jorge-Active takeover check ---
             # If Jorge adds the "Jorge-Active" tag to a contact, the bot goes silent
@@ -515,6 +516,11 @@ class JorgeSellerBot:
 
             # Get or create qualification state (now from Redis)
             state = await self._get_or_create_state(contact_id, location_id)
+            if not isinstance(state.extracted_data, dict):
+                state.extracted_data = {}
+            if not state.extracted_data.get("first_inbound_at"):
+                state.extracted_data["first_inbound_at"] = message_received_at.isoformat()
+            state.extracted_data["last_inbound_at"] = message_received_at.isoformat()
 
             # --- Slot selection intercept ---
             # If scheduling has been offered but appointment not yet booked,
@@ -531,6 +537,12 @@ class JorgeSellerBot:
                         state.appointment_id = str(
                             appt.get("id") or appt.get("appointmentId") or ""
                         )
+                    response_sent_at = datetime.now(timezone.utc)
+                    if not state.extracted_data.get("first_bot_response_at"):
+                        state.extracted_data["first_bot_response_at"] = response_sent_at.isoformat()
+                    state.extracted_data["last_bot_response_at"] = response_sent_at.isoformat()
+                    if state.is_qualified and not state.extracted_data.get("qualified_at"):
+                        state.extracted_data["qualified_at"] = response_sent_at.isoformat()
                     temperature = self._calculate_temperature(state)
                     await self.save_conversation_state(
                         contact_id, state, temperature=temperature
@@ -591,6 +603,12 @@ class JorgeSellerBot:
 
             # Calculate temperature
             temperature = self._calculate_temperature(state)
+            response_sent_at = datetime.now(timezone.utc)
+            if not state.extracted_data.get("first_bot_response_at"):
+                state.extracted_data["first_bot_response_at"] = response_sent_at.isoformat()
+            state.extracted_data["last_bot_response_at"] = response_sent_at.isoformat()
+            if state.is_qualified and not state.extracted_data.get("qualified_at"):
+                state.extracted_data["qualified_at"] = response_sent_at.isoformat()
 
             # --- One-time scheduling offer ---
             # Mark scheduling_offered BEFORE saving so we don't double-offer

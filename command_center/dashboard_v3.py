@@ -164,14 +164,23 @@ def render_analytics(location_id: str) -> None:
     tab1, tab2, tab3 = st.tabs(["Performance", "Commission", "Lead Intelligence"])
 
     with tab1:
-        PerformanceAnalyticsComponent().render()
+        try:
+            PerformanceAnalyticsComponent().render()
+        except Exception as exc:
+            st.error(f"Failed to load Performance analytics: {exc}")
 
     with tab2:
-        CommissionTrackingComponent().render()
+        try:
+            CommissionTrackingComponent().render()
+        except Exception as exc:
+            st.error(f"Failed to load Commission analytics: {exc}")
 
     with tab3:
         lead_location = location_id or "default"
-        LeadIntelligenceDashboard().render_lead_intelligence_section(lead_location)
+        try:
+            LeadIntelligenceDashboard().render_lead_intelligence_section(lead_location)
+        except Exception as exc:
+            st.error(f"Failed to load Lead Intelligence analytics: {exc}")
 
 
 def render_integrations(location_id: str) -> None:
@@ -523,6 +532,8 @@ def _apply_sidebar_navigation_css(theme_mode: str) -> None:
         }
 
         /* Main area actions (Refresh Metrics + Quick Actions) */
+        [data-testid="stAppViewContainer"] [data-testid="stMain"] div[data-testid="stButton"] > button,
+        [data-testid="stAppViewContainer"] .main div[data-testid="stButton"] > button,
         [data-testid="stAppViewContainer"] [data-testid="stMain"] .stButton > button,
         [data-testid="stAppViewContainer"] .main .stButton > button {
             background: var(--lyrio-main-btn-bg) !important;
@@ -533,6 +544,10 @@ def _apply_sidebar_navigation_css(theme_mode: str) -> None:
             box-shadow: var(--lyrio-main-btn-shadow) !important;
             opacity: 1 !important;
         }
+        [data-testid="stAppViewContainer"] [data-testid="stMain"] div[data-testid="stButton"] > button:hover,
+        [data-testid="stAppViewContainer"] [data-testid="stMain"] div[data-testid="stButton"] > button:focus-visible,
+        [data-testid="stAppViewContainer"] .main div[data-testid="stButton"] > button:hover,
+        [data-testid="stAppViewContainer"] .main div[data-testid="stButton"] > button:focus-visible,
         [data-testid="stAppViewContainer"] [data-testid="stMain"] .stButton > button:hover,
         [data-testid="stAppViewContainer"] [data-testid="stMain"] .stButton > button:focus-visible,
         [data-testid="stAppViewContainer"] .main .stButton > button:hover,
@@ -541,6 +556,17 @@ def _apply_sidebar_navigation_css(theme_mode: str) -> None:
             color: var(--lyrio-main-btn-hover-text) !important;
             -webkit-text-fill-color: var(--lyrio-main-btn-hover-text) !important;
             border-color: var(--lyrio-main-btn-hover-border) !important;
+        }
+        [data-testid="stAppViewContainer"] [data-testid="stMain"] div[data-testid="stButton"] > button:disabled,
+        [data-testid="stAppViewContainer"] .main div[data-testid="stButton"] > button:disabled,
+        [data-testid="stAppViewContainer"] [data-testid="stMain"] .stButton > button:disabled,
+        [data-testid="stAppViewContainer"] .main .stButton > button:disabled {
+            background: var(--lyrio-main-btn-bg) !important;
+            color: var(--lyrio-muted-text) !important;
+            -webkit-text-fill-color: var(--lyrio-muted-text) !important;
+            border-color: var(--lyrio-main-btn-border) !important;
+            opacity: 0.72 !important;
+            cursor: not-allowed !important;
         }
 
         /* Align first main heading baseline with sidebar top content. */
@@ -777,6 +803,7 @@ def _initialize_navigation_state() -> None:
 
 def _handle_manual_refresh() -> None:
     load_dashboard_data.clear()
+    st.cache_data.clear()
     st.session_state.last_refresh = datetime.now()
     st.rerun()
 
@@ -825,6 +852,9 @@ def _render_sidebar_navigation(location_id: str) -> str:
         )
         selected_theme = "light" if use_light_mode else "dark"
         if selected_theme != current_theme:
+            # Clear data caches on theme switch so no stale component output persists.
+            load_dashboard_data.clear()
+            st.cache_data.clear()
             st.session_state.ui_theme = selected_theme
             st.query_params["theme"] = selected_theme
             st.rerun()

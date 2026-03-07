@@ -47,6 +47,102 @@ class LeadIntelligenceDashboard:
     def __init__(self):
         self.logger = get_logger(__name__)
 
+    @staticmethod
+    def _is_light_mode() -> bool:
+        """Resolve current UI mode from session/query state."""
+        toggle_state = st.session_state.get("sidebar_theme_toggle")
+        if isinstance(toggle_state, bool):
+            return toggle_state
+
+        theme_value = str(st.session_state.get("ui_theme", "")).strip().lower()
+        if theme_value in {"dark", "light"}:
+            return theme_value == "light"
+
+        query_params = getattr(st, "query_params", {})
+        query_theme = query_params.get("theme") if hasattr(query_params, "get") else None
+        if isinstance(query_theme, list):
+            query_theme = query_theme[0] if query_theme else None
+        return str(query_theme or "").strip().lower() == "light"
+
+    def _chart_palette(self) -> Dict[str, str]:
+        """Return chart palette aligned to current dashboard theme."""
+        if self._is_light_mode():
+            return {
+                "template": "plotly_white",
+                "paper_bg": "#ffffff",
+                "plot_bg": "#f8fafc",
+                "font": "#334155",
+                "grid": "#dbe3ee",
+                "axis": "#cbd5e1",
+                "legend_bg": "rgba(255,255,255,0.72)",
+                "stroke": "#ffffff",
+            }
+        return {
+            "template": "plotly_dark",
+            "paper_bg": "#050c18",
+            "plot_bg": "#0b1220",
+            "font": "#cbd5e1",
+            "grid": "#243449",
+            "axis": "#32445d",
+            "legend_bg": "rgba(5,12,24,0.45)",
+            "stroke": "#233246",
+        }
+
+    def _apply_chart_theme(
+        self,
+        fig: go.Figure,
+        apply_axes: bool = True,
+        **layout_kwargs: Any,
+    ) -> None:
+        """Apply consistent chart styling for light/dark mode."""
+        palette = self._chart_palette()
+        custom_font = layout_kwargs.pop("font", None)
+        custom_legend = layout_kwargs.pop("legend", None)
+
+        merged_font: Any = {"color": palette["font"]}
+        if isinstance(custom_font, dict):
+            merged_font.update(custom_font)
+        elif custom_font is not None:
+            merged_font = custom_font
+
+        merged_legend: Any = {
+            "bgcolor": palette["legend_bg"],
+            "font": {"color": palette["font"]},
+        }
+        if isinstance(custom_legend, dict):
+            legend_font = dict(merged_legend["font"])
+            custom_legend_font = custom_legend.get("font")
+            if isinstance(custom_legend_font, dict):
+                legend_font.update(custom_legend_font)
+            merged_legend.update(custom_legend)
+            merged_legend["font"] = legend_font
+        elif custom_legend is not None:
+            merged_legend = custom_legend
+
+        fig.update_layout(
+            template=palette["template"],
+            paper_bgcolor=palette["paper_bg"],
+            plot_bgcolor=palette["plot_bg"],
+            font=merged_font,
+            legend=merged_legend,
+            **layout_kwargs,
+        )
+        if apply_axes:
+            fig.update_xaxes(
+                gridcolor=palette["grid"],
+                linecolor=palette["axis"],
+                zerolinecolor=palette["grid"],
+                tickfont={"color": palette["font"]},
+                title_font={"color": palette["font"]},
+            )
+            fig.update_yaxes(
+                gridcolor=palette["grid"],
+                linecolor=palette["axis"],
+                zerolinecolor=palette["grid"],
+                tickfont={"color": palette["font"]},
+                title_font={"color": palette["font"]},
+            )
+
     def render_lead_intelligence_section(self, location_id: str) -> None:
         """
         Render the complete lead intelligence dashboard section.
@@ -142,6 +238,7 @@ class LeadIntelligenceDashboard:
             return
 
         st.markdown("**Score Distribution**")
+        palette = self._chart_palette()
 
         # Create score ranges
         scores = [lead["score"] for lead in lead_data]
@@ -161,27 +258,28 @@ class LeadIntelligenceDashboard:
             hole=0.4,
             marker=dict(
                 colors=["#ef4444", "#f59e0b", "#3b82f6"],
-                line=dict(color="#FFFFFF", width=2)
+                line=dict(color=palette["stroke"], width=2)
             ),
             textinfo='label+percent',
             textposition='outside',
             textfont=dict(size=12)
         )])
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=300,
             margin=dict(l=0, r=0, t=20, b=0),
             showlegend=False,
-            font=dict(size=11),
+            font=dict(size=11, color=palette["font"]),
             annotations=[dict(
                 text=f"<b>{len(lead_data)}</b><br>Total Leads",
                 x=0.5, y=0.5,
-                font_size=14,
+                font=dict(size=14, color=palette["font"]),
                 showarrow=False
             )]
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Add summary stats
         hot_count = temp_counts["HOT (80-100)"]
@@ -201,6 +299,7 @@ class LeadIntelligenceDashboard:
             return
 
         st.markdown("**Budget Analysis**")
+        palette = self._chart_palette()
 
         # Create budget ranges aligned with Dallas market
         budget_ranges = []
@@ -235,17 +334,17 @@ class LeadIntelligenceDashboard:
             textfont=dict(color='white', size=11)
         )])
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=300,
             margin=dict(l=0, r=0, t=20, b=40),
             xaxis_title="Number of Leads",
             yaxis_title="",
-            font=dict(size=11),
-            xaxis=dict(showgrid=True, gridcolor="lightgray"),
-            yaxis=dict(showgrid=False)
+            font=dict(size=11, color=palette["font"]),
         )
+        fig.update_yaxes(showgrid=False)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Add market insight
         premium_count = sum(1 for lead in lead_data if lead.get("budget_max", 0) >= 500000)
@@ -263,6 +362,7 @@ class LeadIntelligenceDashboard:
             return
 
         st.markdown("**Timeline Analysis**")
+        palette = self._chart_palette()
 
         # Create timeline categories with urgency mapping
         timeline_categories = []
@@ -311,20 +411,21 @@ class LeadIntelligenceDashboard:
         fig = go.Figure(data=[go.Pie(
             labels=timeline_counts.index,
             values=timeline_counts.values,
-            marker=dict(colors=colors, line=dict(color="#FFFFFF", width=1)),
+            marker=dict(colors=colors, line=dict(color=palette["stroke"], width=1)),
             textinfo='label+percent',
             textposition='outside',
             textfont=dict(size=10)
         )])
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=300,
             margin=dict(l=0, r=0, t=20, b=0),
             showlegend=False,
-            font=dict(size=11)
+            font=dict(size=11, color=palette["font"]),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Add urgency insight
         urgent_count = sum(1 for lead in lead_data if lead.get("timeline") in ["immediate", "1_month"])
@@ -341,6 +442,7 @@ class LeadIntelligenceDashboard:
     def _render_geographic_heatmap(self, lead_data: List[Dict]) -> None:
         """Render geographic performance heatmap"""
         st.markdown("**Geographic Performance**")
+        palette = self._chart_palette()
 
         # Aggregate data by location
         location_data = {}
@@ -391,18 +493,23 @@ class LeadIntelligenceDashboard:
             title=""
         )
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=300,
             margin=dict(l=0, r=0, t=20, b=40),
             xaxis_title="Dallas Metro Areas",
             yaxis_title="Hot Lead Rate (%)",
-            font=dict(size=11),
-            coloraxis_colorbar=dict(title="Avg Score")
+            font=dict(size=11, color=palette["font"]),
+            coloraxis_colorbar=dict(
+                title="Avg Score",
+                titlefont={"color": palette["font"]},
+                tickfont={"color": palette["font"]},
+            ),
         )
 
-        fig.update_traces(marker=dict(line=dict(width=1, color='white')))
+        fig.update_traces(marker=dict(line=dict(width=1, color=palette["stroke"])))
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Add geographic insight
         best_location = geo_df.loc[geo_df["Hot Rate"].idxmax()]
@@ -411,6 +518,8 @@ class LeadIntelligenceDashboard:
     def _render_source_performance_chart(self, lead_data: List[Dict]) -> None:
         """Render lead source performance analytics"""
         st.markdown("**Source Performance**")
+        palette = self._chart_palette()
+        bar_color = "#93c5fd" if self._is_light_mode() else "#7dd3fc"
 
         # Aggregate data by source
         source_data = {}
@@ -456,7 +565,7 @@ class LeadIntelligenceDashboard:
                 x=source_df["Source"],
                 y=source_df["Count"],
                 name="Lead Count",
-                marker_color='lightblue',
+                marker_color=bar_color,
                 opacity=0.7
             ),
             secondary_y=False,
@@ -469,26 +578,33 @@ class LeadIntelligenceDashboard:
                 y=source_df["Hot Rate"],
                 mode='lines+markers',
                 name="Hot Rate %",
-                line=dict(color='red', width=3),
+                line=dict(color="#ef4444", width=3),
                 marker=dict(size=8)
             ),
             secondary_y=True,
         )
 
-        # Update layout
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=300,
             margin=dict(l=0, r=0, t=20, b=40),
-            font=dict(size=11),
+            font=dict(size=11, color=palette["font"]),
             showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02)
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                bgcolor=palette["legend_bg"],
+                font={"color": palette["font"]},
+            ),
         )
 
         fig.update_xaxes(title_text="Lead Sources")
         fig.update_yaxes(title_text="Lead Count", secondary_y=False)
         fig.update_yaxes(title_text="Hot Rate (%)", secondary_y=True)
+        fig.update_yaxes(showgrid=False, secondary_y=True)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Add source performance insight
         if len(source_df) > 0:
@@ -513,6 +629,8 @@ class LeadIntelligenceDashboard:
     def _render_scoring_trends(self, lead_data: List[Dict]) -> None:
         """Render lead scoring trends over time"""
         st.markdown("**Scoring Trends**")
+        palette = self._chart_palette()
+        fill_color = "rgba(16, 185, 129, 0.12)" if self._is_light_mode() else "rgba(16, 185, 129, 0.20)"
 
         # Create time-series data (mock)
         dates = [datetime.now() - timedelta(days=i) for i in range(7, 0, -1)]
@@ -525,20 +643,21 @@ class LeadIntelligenceDashboard:
             mode='lines+markers',
             line=dict(color='#10b981', width=3),
             marker=dict(size=8),
-            fill='tonexty',
-            fillcolor='rgba(16, 185, 129, 0.1)'
+            fill='tozeroy',
+            fillcolor=fill_color
         ))
 
-        fig.update_layout(
+        self._apply_chart_theme(
+            fig,
             height=200,
             margin=dict(l=0, r=0, t=20, b=40),
             xaxis_title="",
             yaxis_title="Avg Score",
-            font=dict(size=10),
+            font=dict(size=10, color=palette["font"]),
             showlegend=False
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Trend analysis
         trend = "+4.8%" if avg_scores[-1] > avg_scores[0] else "-2.1%"
@@ -547,40 +666,62 @@ class LeadIntelligenceDashboard:
     def _render_conversion_predictions(self, lead_data: List[Dict]) -> None:
         """Render conversion predictions"""
         st.markdown("**Conversion Forecast**")
+        palette = self._chart_palette()
+        gauge_steps = (
+            [
+                {"range": [0, 5], "color": "#e2e8f0"},
+                {"range": [5, 8], "color": "#fde68a"},
+                {"range": [8, 10], "color": "#bbf7d0"},
+            ]
+            if self._is_light_mode()
+            else [
+                {"range": [0, 5], "color": "#1f2937"},
+                {"range": [5, 8], "color": "#713f12"},
+                {"range": [8, 10], "color": "#14532d"},
+            ]
+        )
 
         # Mock conversion prediction data
         hot_leads = len([l for l in lead_data if l.get("score", 0) >= 80])
         predicted_conversions = hot_leads * 0.12  # 12% conversion rate
 
         # Create gauge chart
-        fig = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = predicted_conversions,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Expected Conversions"},
-            gauge = {
-                'axis': {'range': [None, 10]},
-                'bar': {'color': "#3b82f6"},
-                'steps': [
-                    {'range': [0, 5], 'color': "lightgray"},
-                    {'range': [5, 8], 'color': "yellow"},
-                    {'range': [8, 10], 'color': "green"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 8
-                }
-            }
-        ))
-
-        fig.update_layout(
-            height=200,
-            margin=dict(l=20, r=20, t=40, b=20),
-            font=dict(size=10)
+        fig = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=predicted_conversions,
+                domain={"x": [0, 1], "y": [0, 1]},
+                title={"text": "Expected Conversions", "font": {"color": palette["font"]}},
+                number={"font": {"color": palette["font"]}},
+                gauge={
+                    "axis": {
+                        "range": [None, 10],
+                        "tickcolor": palette["font"],
+                        "tickfont": {"color": palette["font"]},
+                    },
+                    "bar": {"color": "#3b82f6"},
+                    "bgcolor": palette["plot_bg"],
+                    "bordercolor": palette["axis"],
+                    "borderwidth": 1,
+                    "steps": gauge_steps,
+                    "threshold": {
+                        "line": {"color": "#ef4444", "width": 4},
+                        "thickness": 0.75,
+                        "value": 8,
+                    },
+                },
+            )
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        self._apply_chart_theme(
+            fig,
+            apply_axes=False,
+            height=200,
+            margin=dict(l=20, r=20, t=40, b=20),
+            font=dict(size=10, color=palette["font"]),
+        )
+
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         st.metric("This Week", f"{predicted_conversions:.1f} conversions", "+0.8")
 
