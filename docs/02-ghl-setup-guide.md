@@ -4,7 +4,7 @@ For: Jorge Salazar
 Purpose: Complete GoHighLevel configuration required to connect the bots to your account
 
 
-This guide covers every step required in GoHighLevel to wire up the three bots. The bots are already live and running. This is the GHL side of the connection.
+This guide covers every step required in GoHighLevel to wire up the three bots on Railway. This is the GHL side of the connection.
 
 There are 4 parts:
     1. Create the custom contact fields (once, 10 minutes — 13 fields total)
@@ -122,7 +122,7 @@ Navigate to: Settings > Integrations > Webhooks > Add Webhook
 WEBHOOK 1 — NEW CONTACT
 
     Name: Jorge Bots - New Lead
-    URL: https://jorge-realty-ai-xxdf.onrender.com/ghl/webhook/new-lead
+    URL: https://lead-bot-production-8fd6.up.railway.app/ghl/webhook/new-lead
     Events to send: Contact Created
     Method: POST
     Status: Enabled
@@ -131,7 +131,7 @@ WEBHOOK 1 — NEW CONTACT
 WEBHOOK 2 — INCOMING MESSAGES
 
     Name: Jorge Bots - Inbound Message
-    URL: https://jorge-realty-ai-xxdf.onrender.com/api/ghl/webhook
+    URL: https://lead-bot-production-8fd6.up.railway.app/api/ghl/webhook
     Important: If using GHL Workflow "Send Webhook" action, include this in Custom Data:
         bot_type: {{contact.bot_type}}
     Events to send: Inbound Message (or "Conversation Message Created" depending on your GHL version)
@@ -140,6 +140,14 @@ WEBHOOK 2 — INCOMING MESSAGES
 
 
 After saving both, send yourself a test SMS from a new contact and confirm in the bot dashboard (lyrio-jorge.streamlit.app) that a conversation appeared. If it shows up, the webhooks are connected.
+
+RAILWAY NOTE
+    Railway does not assign a public URL automatically.
+    For the lead-bot service, go to:
+        Service -> Settings -> Networking -> Public Networking -> Generate Domain
+    Railway will create a public HTTPS domain ending in `.up.railway.app`.
+    Current production lead-bot domain:
+        https://lead-bot-production-8fd6.up.railway.app
 
 
 ========================================

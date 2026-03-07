@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -386,6 +387,11 @@ async def unified_ghl_webhook(request: Request, background_tasks: BackgroundTask
             response_message = sanitize_bot_response(response_message)
             if response_message and ghl_client:
                 try:
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            f"[OUTBOUND_SMS] contact={contact_id} bot_type={bot_type_lower!r} "
+                            f"message={response_message!r}"
+                        )
                     await ghl_client.send_message(contact_id, response_message, "SMS")
                     logger.info(f"Reply sent to {contact_id} via GHL SMS")
                 except Exception as e:

@@ -83,33 +83,36 @@ These fields are filled in automatically as the bots qualify leads.
 ### Bot Connections (Webhooks)
 **Path:** Inside any workflow → look for **"Custom Action"** or **"Webhook"** steps
 
-These are the steps that call the bot server. The URL pattern is:
+These are the steps that call the bot server. In the Railway deployment, use one shared webhook URL:
 
 ```
-https://jorge-realty-ai-xxdf.onrender.com/api/jorge-seller/process   ← seller bot
-https://jorge-realty-ai-xxdf.onrender.com/api/jorge-buyer/process    ← buyer bot
-https://jorge-realty-ai-xxdf.onrender.com/api/lead/process           ← lead bot
+https://lead-bot-production-8fd6.up.railway.app/api/ghl/webhook
 ```
 
-You will also see an **Authorization** header set to the API key — do not change this unless you regenerate the key on Render.
+GHL should not call separate buyer, seller, or lead bot URLs. It should always call the shared webhook, and the backend should route based on `customData.bot_type`.
 
 ---
 
-## Render (Bot Server)
+## Railway (Bot Server)
 
-**URL:** dashboard.render.com → Web Services → **jorge-realty-ai**
+**Path:** Railway project -> select service -> **Settings** -> **Networking**
 
-This is the cloud server that runs all three bots. You rarely need to touch it, but here's what you can do:
+This is where you create or inspect the public domain for the Lead Bot service. Railway will generate an HTTPS domain ending in `.up.railway.app`. That Lead Bot public domain is the URL you put into GHL.
 
-| Section | Path in Render | What you can do |
+Current production domains:
+- Lead Bot (use in GHL): `https://lead-bot-production-8fd6.up.railway.app`
+- Seller Bot: `https://seller-bot-production.up.railway.app`
+- Buyer Bot: `https://buyer-bot-production.up.railway.app`
+
+| Section | Path in Railway | What you can do |
 |---|---|---|
-| **Logs** | jorge-realty-ai → **Logs** | See every message the bot processed, errors, tag writes |
-| **Shell** | jorge-realty-ai → **Shell** | Run one-off commands or test the API directly |
-| **Environment** | jorge-realty-ai → **Environment** | View/change API keys (GHL key, Anthropic key, etc.) — never commit these to GitHub |
-| **Deploys** | jorge-realty-ai → **Deploys** | See deploy history. Auto-deploys on every GitHub push. |
-| **Scaling** | jorge-realty-ai → **Scaling** | Change instance size if it's slow under load |
+| **Networking** | service → **Settings** → **Networking** | Generate the public domain used by GHL |
+| **Logs** | service → **Observability** or **Deployments** | See every message the bot processed, errors, tag writes |
+| **Variables** | service → **Variables** | View/change API keys (GHL key, Anthropic key, etc.) |
+| **Deployments** | service → **Deployments** | See deploy history and latest release |
+| **Metrics** | service → **Metrics** | Check health, resource usage, and restarts |
 
-**Bot endpoints you can call directly** (e.g. from Render Shell with curl):
+**Bot endpoints you can call directly**:
 
 ```
 GET  /health                          — check if server is running
@@ -151,8 +154,8 @@ GET  /api/jorge-seller/{id}/progress  — check a contact's Q1–Q4 progress
 | Change the bot's personality/persona | Lyrio Dashboard → **Tone** → System prompt |
 | See how qualified a seller lead is | GHL → Contact → Custom Fields (`seller_questions_answered`, `seller_temperature`) |
 | Manually take over a conversation | Add `Jorge-Active` tag to contact in GHL |
-| See the bot's recent activity / errors | Render → jorge-realty-ai → **Logs** |
+| See the bot's recent activity / errors | Railway → service → **Observability** or **Deployments** |
 | See lead scores and AI cost | Lyrio Dashboard → **Activity** or **Costs** |
 | Find which workflow routes texts to bots | GHL → Automation → Workflows → "AI Workflow" folder → "5. Process Message — Which Bot?" |
-| Update the GHL API key | Render → jorge-realty-ai → **Environment** → `GHL_API_KEY` |
-| Update the Anthropic (Claude) API key | Render → jorge-realty-ai → **Environment** → `ANTHROPIC_API_KEY` |
+| Update the GHL API key | Railway → service → **Variables** → `GHL_API_KEY` |
+| Update the Anthropic (Claude) API key | Railway → service → **Variables** → `ANTHROPIC_API_KEY` |

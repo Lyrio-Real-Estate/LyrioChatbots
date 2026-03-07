@@ -9,7 +9,7 @@ Common issues and solutions for the Jorge Real Estate Bots system.
 ### Webhooks not firing
 
 1. **Verify the webhook URL is correct** in GHL Settings > Webhooks:
-   - Production: `https://jorge-realty-ai-xxdf.onrender.com/api/ghl/webhook`
+   - Production: `https://lead-bot-production-8fd6.up.railway.app/api/ghl/webhook`
    - Local: `http://localhost:8001/api/ghl/webhook`
 
 2. **Check the GHL workflow is active.** Go to Automations > Workflows and confirm "5. Process Message - Which Bot?" is published and enabled.

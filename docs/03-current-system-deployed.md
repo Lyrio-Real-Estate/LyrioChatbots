@@ -4,10 +4,14 @@ For: Jorge Salazar
 Purpose: Exact technical flow of the three bots currently running in production
 
 
-The bots are live at:
-    https://jorge-realty-ai-xxdf.onrender.com
+The bots are deployed on Railway.
 
-This is a single service running on Render (a cloud hosting platform). All three bots — Lead Bot, Seller Bot, and Buyer Bot — run inside this one process. GHL talks to it via webhooks. The service talks back to GHL via the GHL API.
+Recommended production shape:
+    Lead Bot public URL:   https://lead-bot-production-8fd6.up.railway.app
+    Seller Bot public URL: https://seller-bot-production.up.railway.app
+    Buyer Bot public URL:  https://buyer-bot-production.up.railway.app
+
+GoHighLevel should talk to one shared webhook on the Lead Bot service. The Lead Bot service acts as the router and dispatches internally to Lead Bot, Seller Bot, and Buyer Bot logic. The service talks back to GHL via the GHL API.
 
 
 ========================================
@@ -19,7 +23,7 @@ Step 1: Lead texts in
 
 Step 2: GHL fires a webhook
     GHL sends the message content, contact ID, and contact details to:
-    https://jorge-realty-ai-xxdf.onrender.com/api/ghl/webhook
+    https://lead-bot-production-8fd6.up.railway.app/api/ghl/webhook
 
 Step 3: Message router decides which bot handles it
     The service checks the contact's existing tags and custom fields to determine
@@ -58,7 +62,7 @@ NEW CONTACT FLOW — WHAT HAPPENS FIRST
 When a brand new contact is created in GHL (not a reply — a first touch):
 
 Step 1: GHL fires a "Contact Created" webhook to:
-    https://jorge-realty-ai-xxdf.onrender.com/ghl/webhook/new-lead
+    https://lead-bot-production-8fd6.up.railway.app/ghl/webhook/new-lead
 
 Step 2: Lead Bot receives the new contact
     It checks if the contact has a seller or buyer tag already.
@@ -135,15 +139,15 @@ BUYER BOT
 INFRASTRUCTURE — WHAT IS RUNNING WHERE
 ========================================
 
-Bot Service
-    Host: Render (render.com)
-    Service ID: srv-d6d5go15pdvs73fcjjq0
-    URL: jorge-realty-ai-xxdf.onrender.com
-    What it runs: Lead Bot + Seller Bot + Buyer Bot (all in one process)
-    Memory: Spins down after 15 minutes of inactivity on free plan (cold start ~30 seconds)
+Bot Services
+    Host: Railway (railway.app)
+    Public URL used by GHL: https://lead-bot-production-8fd6.up.railway.app
+    Shared webhook URL: https://lead-bot-production-8fd6.up.railway.app/api/ghl/webhook
+    What it runs: Lead Bot as the public webhook router, with Seller Bot and Buyer Bot handled behind the shared webhook architecture
+    Networking: generate a public domain for the Lead Bot service in Railway Settings -> Networking
 
 Cache (Conversation Memory)
-    Primary: Redis (if IP allowlist permits the Render IP)
+    Primary: Redis
     Fallback: In-process memory cache (resets on restart)
     TTL: 7 days per conversation
 
@@ -160,7 +164,7 @@ AI Engine
 
 GHL Connection
     All GHL reads and writes use the GHL REST API v2.
-    Auth: GHL API key stored in Render environment variables (never in code)
+    Auth: GHL API key stored in Railway environment variables (never in code)
 
 
 ========================================
